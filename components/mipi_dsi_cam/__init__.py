@@ -63,17 +63,6 @@ def load_sensors():
     except Exception as e:
         logger.error(f"Error loading SC202CS: {e}")
     
-    try:
-        from .sensor_mipi_csi_sc2336 import get_sensor_info, get_driver_code
-        AVAILABLE_SENSORS['sc2336'] = {
-            'info': get_sensor_info(),
-            'driver': get_driver_code
-        }
-        logger.info("SC2336 sensor loaded")
-    except ImportError as e:
-        logger.warning(f"SC2336 sensor not available: {e}")
-    except Exception as e:
-        logger.error(f"Error loading SC2336: {e}")
 
     try:
         from .sensor_mipi_csi_ov5647 import get_sensor_info, get_driver_code
@@ -87,27 +76,7 @@ def load_sensors():
     except Exception as e:
         logger.error(f"Error loading OV5647: {e}")
     
-    try:
-        from .sensor_mipi_csi_ov5647_480p import get_sensor_info, get_driver_code
-        AVAILABLE_SENSORS['ov5647_480p'] = {
-            'info': get_sensor_info(),
-            'driver': get_driver_code
-        }
-        logger.info("OV5647_480P sensor loaded (800x480)")
-    except ImportError as e:
-        logger.warning(f"OV5647_480P sensor not available: {e}")
-    except Exception as e:
-        logger.error(f"Error loading OV5647_480P: {e}")
-    try:
-        from .sensor_mipi_csi_ov5647_vga import get_sensor_info, get_driver_code
-        AVAILABLE_SENSORS['ov5647_vga'] = {
-            'info': get_sensor_info(),
-            'driver': get_driver_code
-        }
-        logger.info("OV5647_VGA sensor loaded (640x480 @ 90fps)")
-    except ImportError as e:
-        logger.warning(f"OV5647_VGA sensor not available: {e}")
-    
+ 
     try:
         from .sensor_mipi_csi_ov02c10 import get_sensor_info, get_driver_code
         AVAILABLE_SENSORS['ov02c10'] = {
