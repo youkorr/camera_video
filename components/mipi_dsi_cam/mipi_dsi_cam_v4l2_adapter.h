@@ -8,7 +8,7 @@
 
 // Inclure les headers V4L2 d'ESP-IDF
 extern "C" {
-  #include "linux/videodev2.h"
+  #include "videodev2.h"
 }
 
 namespace esphome {
