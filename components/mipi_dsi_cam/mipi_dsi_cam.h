@@ -14,6 +14,23 @@ extern "C" {
 }
 #endif
 
+// Forward declarations pour V4L2
+#ifdef MIPI_DSI_CAM_ENABLE_V4L2
+namespace esphome {
+namespace mipi_dsi_cam {
+class MipiDsiCamV4L2Adapter;
+}
+}
+#endif
+
+#ifdef MIPI_DSI_CAM_ENABLE_ISP_PIPELINE
+namespace esphome {
+namespace mipi_dsi_cam {
+class MipiDsiCamISPPipeline;
+}
+}
+#endif
+
 namespace esphome {
 namespace mipi_dsi_cam {
 
@@ -90,6 +107,18 @@ class MipiDsiCam : public Component, public i2c::I2CDevice {
   void adjust_gain(uint8_t gain_index);
   void set_brightness_level(uint8_t level);
 
+#ifdef MIPI_DSI_CAM_ENABLE_V4L2
+  // Interface V4L2
+  void enable_v4l2_adapter();
+  MipiDsiCamV4L2Adapter* get_v4l2_adapter() { return this->v4l2_adapter_; }
+#endif
+
+#ifdef MIPI_DSI_CAM_ENABLE_ISP_PIPELINE
+  // Pipeline ISP avancé
+  void enable_isp_pipeline();
+  MipiDsiCamISPPipeline* get_isp_pipeline() { return this->isp_pipeline_; }
+#endif
+
  protected:
   int8_t external_clock_pin_{-1};
   uint32_t external_clock_frequency_{24000000};
@@ -133,6 +162,14 @@ class MipiDsiCam : public Component, public i2c::I2CDevice {
   float wb_red_gain_{1.3f};
   float wb_green_gain_{0.9f};
   float wb_blue_gain_{1.1f};
+
+#ifdef MIPI_DSI_CAM_ENABLE_V4L2
+  MipiDsiCamV4L2Adapter *v4l2_adapter_{nullptr};
+#endif
+
+#ifdef MIPI_DSI_CAM_ENABLE_ISP_PIPELINE
+  MipiDsiCamISPPipeline *isp_pipeline_{nullptr};
+#endif
   
 #ifdef USE_ESP32_VARIANT_ESP32P4
   esp_cam_ctlr_handle_t csi_handle_{nullptr};
