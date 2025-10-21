@@ -25,6 +25,10 @@ CONF_RESOLUTION = "resolution"
 CONF_PIXEL_FORMAT = "pixel_format"
 CONF_FRAMERATE = "framerate"
 CONF_JPEG_QUALITY = "jpeg_quality"
+CONF_ENABLE_V4L2 = "enable_v4l2"
+CONF_ENABLE_ISP_PIPELINE = "enable_isp_pipeline"
+CONF_ENABLE_JPEG_ENCODER = "enable_jpeg_encoder"
+CONF_ENABLE_H264_ENCODER = "enable_h264_encoder"
 
 PixelFormat = mipi_dsi_cam_ns.enum("PixelFormat")
 PIXEL_FORMAT_RGB565 = PixelFormat.PIXEL_FORMAT_RGB565
@@ -37,12 +41,11 @@ PIXEL_FORMATS = {
     "RAW8": PIXEL_FORMAT_RAW8,
 }
 
-# Résolutions disponibles
 RESOLUTIONS = {
     "720P": (1280, 720),
     "800x640": (800, 640),
-    "800x480": (800, 480),      # Ajout pour OV5647_480P
-    "1280x800": (1280, 800),    # Ajout pour OV02C10
+    "800x480": (800, 480),
+    "1280x800": (1280, 800),
 }
 
 AVAILABLE_SENSORS = {}
@@ -63,7 +66,6 @@ def load_sensors():
     except Exception as e:
         logger.error(f"Error loading SC202CS: {e}")
     
-
     try:
         from .sensor_mipi_csi_ov5647 import get_sensor_info, get_driver_code
         AVAILABLE_SENSORS['ov5647'] = {
@@ -76,7 +78,6 @@ def load_sensors():
     except Exception as e:
         logger.error(f"Error loading OV5647: {e}")
     
- 
     try:
         from .sensor_mipi_csi_ov02c10 import get_sensor_info, get_driver_code
         AVAILABLE_SENSORS['ov02c10'] = {
@@ -124,31 +125,19 @@ def validate_resolution(value):
             )
     raise cv.Invalid("Le format de résolution doit être '720P', '800x640', '800x480' ou '1280x800'")
 
-# Marqueur spécial pour indiquer "pas d'horloge externe"
 NO_CLOCK = "__NO_EXTERNAL_CLOCK__"
 
 def validate_external_clock_pin(value):
-    """Valide le pin d'horloge externe ou retourne un marqueur si désactivé"""
-    # Si pas de valeur
     if value is None:
         return NO_CLOCK
-    
-    # Si c'est le booléen False
     if value is False:
         return NO_CLOCK
-    
-    # Si c'est une string "none" ou "false" (case insensitive)
     if isinstance(value, str):
         lower_val = value.lower()
         if lower_val in ["none", "false", "null"]:
             return NO_CLOCK
-    
-    # Si c'est un entier, valider la plage
     if isinstance(value, int):
         return cv.int_range(min=0, max=50)(value)
-    
-    # Sinon, c'est probablement un dictionnaire de config de pin
-    # On le passe à travers le validateur de pin
     return pins.internal_gpio_output_pin_schema(value)
 
 CONFIG_SCHEMA = cv.Schema(
@@ -165,6 +154,12 @@ CONFIG_SCHEMA = cv.Schema(
         cv.Optional(CONF_PIXEL_FORMAT, default="RGB565"): cv.enum(PIXEL_FORMATS, upper=True),
         cv.Optional(CONF_FRAMERATE): cv.int_range(min=1, max=60),
         cv.Optional(CONF_JPEG_QUALITY, default=10): cv.int_range(min=1, max=63),
+        
+        # Options V4L2 et encoders
+        cv.Optional(CONF_ENABLE_V4L2, default=False): cv.boolean,
+        cv.Optional(CONF_ENABLE_ISP_PIPELINE, default=False): cv.boolean,
+        cv.Optional(CONF_ENABLE_JPEG_ENCODER, default=False): cv.boolean,
+        cv.Optional(CONF_ENABLE_H264_ENCODER, default=False): cv.boolean,
     }
 ).extend(cv.COMPONENT_SCHEMA).extend(i2c.i2c_device_schema(0x36))
 
@@ -180,21 +175,16 @@ async def to_code(config):
     if CONF_EXTERNAL_CLOCK_PIN in config:
         ext_clock_value = config[CONF_EXTERNAL_CLOCK_PIN]
         
-        # Si c'est notre marqueur "pas d'horloge"
         if ext_clock_value == NO_CLOCK:
             cg.add(var.set_external_clock_pin(-1))
-        # Si c'est un entier
         elif isinstance(ext_clock_value, int):
             cg.add(var.set_external_clock_pin(ext_clock_value))
-        # Si c'est un dictionnaire (pin config)
         elif isinstance(ext_clock_value, dict):
             pin_num = ext_clock_value[pins.CONF_NUMBER]
             cg.add(var.set_external_clock_pin(pin_num))
         else:
-            # Fallback
             cg.add(var.set_external_clock_pin(-1))
     else:
-        # Pas de clé external_clock_pin dans le config
         cg.add(var.set_external_clock_pin(-1))
     
     cg.add(var.set_external_clock_frequency(config[CONF_FREQUENCY]))
@@ -203,7 +193,7 @@ async def to_code(config):
     sensor_name = config[CONF_SENSOR]
     sensor_info = AVAILABLE_SENSORS[sensor_name]['info']
     
-    # Utiliser la résolution spécifiée ou la résolution native du capteur
+    # Résolution
     if CONF_RESOLUTION in config:
         width, height = config[CONF_RESOLUTION]
         resolution_source = "configured"
@@ -212,7 +202,7 @@ async def to_code(config):
         height = sensor_info['height']
         resolution_source = "native"
     
-    # Utiliser les paramètres du capteur ou ceux spécifiés par l'utilisateur
+    # Paramètres du capteur
     lane_count = config.get(CONF_LANE, sensor_info['lane_count'])
     sensor_address = config.get(CONF_ADDRESS_SENSOR, sensor_info['i2c_address'])
     framerate = config.get(CONF_FRAMERATE, sensor_info['fps'])
@@ -232,6 +222,27 @@ async def to_code(config):
         reset_pin = await cg.gpio_pin_expression(config[CONF_RESET_PIN])
         cg.add(var.set_reset_pin(reset_pin))
     
+    # Activer les fonctionnalités V4L2
+    enable_v4l2 = config.get(CONF_ENABLE_V4L2, False)
+    enable_isp = config.get(CONF_ENABLE_ISP_PIPELINE, False)
+    enable_jpeg = config.get(CONF_ENABLE_JPEG_ENCODER, False)
+    enable_h264 = config.get(CONF_ENABLE_H264_ENCODER, False)
+    
+    if enable_v4l2:
+        cg.add_define("MIPI_DSI_CAM_ENABLE_V4L2")
+        cg.add(var.enable_v4l2_adapter())
+    
+    if enable_isp:
+        cg.add_define("MIPI_DSI_CAM_ENABLE_ISP_PIPELINE")
+        cg.add(var.enable_isp_pipeline())
+    
+    if enable_jpeg:
+        cg.add_define("MIPI_DSI_CAM_ENABLE_JPEG")
+    
+    if enable_h264:
+        cg.add_define("MIPI_DSI_CAM_ENABLE_H264")
+    
+    # Générer le code des drivers
     import os
     
     all_drivers_code = ""
@@ -284,6 +295,11 @@ inline ISensorDriver* create_sensor_driver(const std::string& sensor_type, i2c::
     has_ext_clock = CONF_EXTERNAL_CLOCK_PIN in config and config[CONF_EXTERNAL_CLOCK_PIN] != NO_CLOCK
     ext_clock_msg = "enabled" if has_ext_clock else "disabled"
     
+    v4l2_msg = "enabled" if enable_v4l2 else "disabled"
+    isp_msg = "enabled" if enable_isp else "disabled"
+    jpeg_msg = "enabled" if enable_jpeg else "disabled"
+    h264_msg = "enabled" if enable_h264 else "disabled"
+    
     cg.add(cg.RawExpression(f'''
         ESP_LOGI("compile", "Camera configuration:");
         ESP_LOGI("compile", "  Sensor: {sensor_name}");
@@ -293,4 +309,8 @@ inline ISensorDriver* create_sensor_driver(const std::string& sensor_type, i2c::
         ESP_LOGI("compile", "  Format: {config[CONF_PIXEL_FORMAT]}");
         ESP_LOGI("compile", "  FPS: {framerate}");
         ESP_LOGI("compile", "  External Clock: {ext_clock_msg}");
+        ESP_LOGI("compile", "  V4L2 Interface: {v4l2_msg}");
+        ESP_LOGI("compile", "  ISP Pipeline: {isp_msg}");
+        ESP_LOGI("compile", "  JPEG Encoder: {jpeg_msg}");
+        ESP_LOGI("compile", "  H264 Encoder: {h264_msg}");
     '''))
