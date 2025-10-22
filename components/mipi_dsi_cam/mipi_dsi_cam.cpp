@@ -641,10 +641,10 @@ void MipiDsiCam::enable_v4l2_adapter() {
     ESP_LOGW(TAG, "V4L2 adapter already enabled");
     return;
   }
-
+  
   ESP_LOGI(TAG, "Enabling V4L2 adapter...");
   this->v4l2_adapter_ = new MipiDsiCamV4L2Adapter(this);
-
+  
   esp_err_t ret = this->v4l2_adapter_->init();
   if (ret != ESP_OK) {
     ESP_LOGE(TAG, "Failed to initialize V4L2 adapter");
@@ -666,10 +666,10 @@ void MipiDsiCam::enable_isp_pipeline() {
     ESP_LOGW(TAG, "ISP pipeline already enabled");
     return;
   }
-
+  
   ESP_LOGI(TAG, "Enabling ISP pipeline...");
   this->isp_pipeline_ = new MipiDsiCamISPPipeline(this);
-
+  
   esp_err_t ret = this->isp_pipeline_->init();
   if (ret != ESP_OK) {
     ESP_LOGE(TAG, "Failed to initialize ISP pipeline");
@@ -684,7 +684,6 @@ void MipiDsiCam::enable_isp_pipeline() {
   ESP_LOGW(TAG, "ISP pipeline not compiled in. Enable enable_isp_pipeline: true in your configuration.");
 }
 #endif
-
 
 }  // namespace mipi_dsi_cam
 }  // namespace esphome
