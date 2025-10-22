@@ -56,8 +56,8 @@ async def to_code(config):
     
     # Configuration de rotation et mirror
     cg.add(var.set_rotation(config[CONF_ROTATION]))
-    cg.add(var.set_mirror_x(config[CONF_MIRROR_X]))
-    cg.add(var.set_mirror_y(config[CONF_MIRROR_Y]))
+    #cg.add(var.set_mirror_x(config[CONF_MIRROR_X]))
+    #cg.add(var.set_mirror_y(config[CONF_MIRROR_Y]))
     
     # Configuration des encodeurs
     #cg.add(var.set_jpeg_output(config[CONF_JPEG_OUTPUT]))
