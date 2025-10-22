@@ -7,7 +7,7 @@
 #ifdef USE_ESP32_VARIANT_ESP32P4
 #include <fcntl.h>
 #include <sys/ioctl.h>
-#include <sys/mman.h>
+#include "mman.h"
 #include "../mipi_dsi_cam/videodev2.h"
 #include "../mipi_dsi_cam/esp_video_device.h"
 #include "driver/ppa.h"
