@@ -236,8 +236,15 @@ void LVGLCameraDisplay::update_canvas_() {
 
   // Mettre à jour le buffer du canvas
   if (this->last_buffer_ptr_ != img_data) {
-    lv_canvas_set_buffer(this->canvas_obj_, img_data, width, height, 
-                         LV_COLOR_FORMAT_RGB565);
+    // Compatibilité LVGL v8 et v9
+    #if LV_VERSION_CHECK(9, 0, 0)
+      lv_canvas_set_buffer(this->canvas_obj_, img_data, width, height, 
+                           LV_COLOR_FORMAT_RGB565);
+    #else
+      // LVGL v8 utilise LV_IMG_CF_TRUE_COLOR pour RGB565
+      lv_canvas_set_buffer(this->canvas_obj_, img_data, width, height, 
+                           LV_IMG_CF_TRUE_COLOR);
+    #endif
     this->last_buffer_ptr_ = img_data;
   }
   
