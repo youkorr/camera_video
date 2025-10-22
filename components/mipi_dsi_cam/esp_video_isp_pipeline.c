@@ -21,9 +21,9 @@
 #include "esp_log.h"
 #include "esp_check.h"
 
-#include "linux/videodev2.h"
+#include "videodev2.h"
 #include "esp_video_pipeline_isp.h"
-#include "esp_video_isp_ioctl.h"
+//#include "esp_video_isp_ioctl.h"
 #include "esp_ipa.h"
 
 #define ISP_METADATA_BUFFER_COUNT 2
