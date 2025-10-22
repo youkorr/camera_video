@@ -11,6 +11,16 @@ void LVGLCameraDisplay::setup() {
   ESP_LOGCONFIG(TAG, "🎥 LVGL Camera Display (V4L2 Pipeline)");
 
 #ifdef USE_ESP32_VARIANT_ESP32P4
+  // Récupérer la résolution depuis la caméra
+  if (this->camera_) {
+    this->width_ = this->camera_->get_image_width();
+    this->height_ = this->camera_->get_image_height();
+    ESP_LOGI(TAG, "📐 Using camera resolution: %ux%u", this->width_, this->height_);
+  } else {
+    ESP_LOGW(TAG, "⚠️  No camera linked, using default resolution %ux%u", 
+             this->width_, this->height_);
+  }
+
   // Ouvrir le device vidéo
   if (!this->open_video_device_()) {
     ESP_LOGE(TAG, "❌ Failed to open video device");
@@ -365,7 +375,7 @@ void LVGLCameraDisplay::loop() {
 
   uint32_t now = millis();
   
-  // Throttle optionnel
+  // Throttle selon update_interval
   if (now - this->last_update_time_ < this->update_interval_) {
     return;
   }
@@ -380,7 +390,7 @@ void LVGLCameraDisplay::loop() {
       if (this->last_fps_time_ > 0) {
         float elapsed = (now - this->last_fps_time_) / 1000.0f;
         float fps = 100.0f / elapsed;
-        ESP_LOGI(TAG, "🎞️  FPS: %.2f | Frames: %u", fps, this->frame_count_);
+        ESP_LOGI(TAG, "🎞️  Display FPS: %.2f | Frames: %u", fps, this->frame_count_);
       }
       this->last_fps_time_ = now;
     }
@@ -486,6 +496,15 @@ void LVGLCameraDisplay::dump_config() {
   ESP_LOGCONFIG(TAG, "  Rotation: %d°", this->rotation_);
   ESP_LOGCONFIG(TAG, "  Mirror X: %s", this->mirror_x_ ? "YES" : "NO");
   ESP_LOGCONFIG(TAG, "  Mirror Y: %s", this->mirror_y_ ? "YES" : "NO");
+  ESP_LOGCONFIG(TAG, "  Update interval: %u ms", this->update_interval_);
+  
+  if (this->camera_) {
+    ESP_LOGCONFIG(TAG, "  Camera linked: YES (%ux%u)", 
+                  this->camera_->get_image_width(), 
+                  this->camera_->get_image_height());
+  } else {
+    ESP_LOGCONFIG(TAG, "  Camera linked: NO");
+  }
 }
 
 void LVGLCameraDisplay::configure_canvas(lv_obj_t *canvas) {
@@ -500,9 +519,6 @@ void LVGLCameraDisplay::configure_canvas(lv_obj_t *canvas) {
     // Optimisations LVGL
     lv_obj_clear_flag(canvas, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_set_style_bg_opa(canvas, LV_OPA_TRANSP, 0);
-    
-    // Note: lv_obj_set_style_img_antialias n'existe pas en LVGL v8
-    // C'est une API v9, on la retire
   }
 }
 
