@@ -656,6 +656,7 @@ void MipiDsiCam::enable_v4l2_adapter() {
 }
 #else
 void MipiDsiCam::enable_v4l2_adapter() {
+  // Ne touche PAS v4l2_adapter_ ici car c'est void* dans ce cas
   ESP_LOGW(TAG, "V4L2 adapter not compiled in. Enable enable_v4l2: true in your configuration.");
 }
 #endif
@@ -681,6 +682,7 @@ void MipiDsiCam::enable_isp_pipeline() {
 }
 #else
 void MipiDsiCam::enable_isp_pipeline() {
+  // Ne touche PAS isp_pipeline_ ici car c'est void* dans ce cas
   ESP_LOGW(TAG, "ISP pipeline not compiled in. Enable enable_isp_pipeline: true in your configuration.");
 }
 #endif
