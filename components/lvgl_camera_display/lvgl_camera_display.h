@@ -2,32 +2,24 @@
 
 #include "esphome/core/component.h"
 #include "esphome/core/hal.h"
-#include "esphome/components/lvgl/lvgl_esphome.h"
-#include "../mipi_dsi_cam/esp_video_buffer.h"
+#include "esphome/components/lvgl/lvgl.h"
 
 #ifdef USE_ESP32_VARIANT_ESP32P4
-#include "hal/ppa_hal.h"
+#include <fcntl.h>
+#include <sys/ioctl.h>
+#include <sys/mman.h>
+#include "../mipi_dsi_cam/videodev2.h"
+#include "../mipi_dsi_cam/esp_video_device.h"
 #include "driver/ppa.h"
-#endif
-
-// Forward declarations
-#ifdef MIPI_DSI_CAM_ENABLE_JPEG
-#include "mipi_dsi_cam_encoders.h"
+#include "esp_cache.h"
 #endif
 
 namespace esphome {
 namespace lvgl_camera_display {
 
-// Nombre de buffers pour le double/triple buffering
-#define VIDEO_BUFFER_COUNT 2  // Peut être augmenté à 3 pour triple buffering
-
-// Définir les macros pour gérer l'état des buffers
-#define ELEMENT_IS_FREE(e)    ((e)->flags == 0)
-#define ELEMENT_IS_QUEUED(e)  ((e)->flags & (1 << 0))
-#define ELEMENT_IS_ACTIVE(e)  ((e)->flags & (1 << 1))
-#define ELEMENT_SET_FREE(e)   ((e)->flags = 0)
-#define ELEMENT_SET_QUEUED(e) ((e)->flags = (1 << 0))
-#define ELEMENT_SET_ACTIVE(e) ((e)->flags = (1 << 1))
+// Configuration
+#define VIDEO_BUFFER_COUNT 3  // Triple buffering comme dans votre exemple
+#define MEMORY_TYPE V4L2_MEMORY_MMAP
 
 enum Rotation {
   ROTATION_0 = 0,
@@ -44,83 +36,58 @@ class LVGLCameraDisplay : public Component {
   float get_setup_priority() const override { return setup_priority::HARDWARE; }
 
   // Configuration
-  void set_camera(void *camera) { this->camera_ = (CameraComponent*)camera; }
+  void set_video_device(const char *dev) { this->video_device_ = dev; }
+  void set_width(uint16_t width) { this->width_ = width; }
+  void set_height(uint16_t height) { this->height_ = height; }
   void configure_canvas(lv_obj_t *canvas);
   void set_update_interval(uint32_t interval_ms) { this->update_interval_ = interval_ms; }
   
-  // Transformations
+  // Transformations PPA
   void set_rotation(Rotation rotation) { this->rotation_ = rotation; }
   void set_mirror_x(bool enable) { this->mirror_x_ = enable; }
   void set_mirror_y(bool enable) { this->mirror_y_ = enable; }
   
-  // Encodage
-  void set_jpeg_output(bool enable) { this->jpeg_output_ = enable; }
-  void set_h264_output(bool enable) { this->h264_output_ = enable; }
-  void set_jpeg_quality(uint8_t quality) { this->jpeg_quality_ = quality; }
-  void set_h264_bitrate(uint32_t bitrate) { this->h264_bitrate_ = bitrate; }
-  void set_h264_gop_size(uint32_t gop) { this->h264_gop_size_ = gop; }
-
   // Stats
   uint32_t get_frame_count() const { return this->frame_count_; }
 
  protected:
-  // Camera abstraction (adapter votre classe de caméra)
-  struct CameraComponent {
-    virtual bool is_streaming() = 0;
-    virtual bool capture_frame() = 0;
-    virtual uint8_t* get_image_data() = 0;
-    virtual uint16_t get_image_width() = 0;
-    virtual uint16_t get_image_height() = 0;
-  };
-
-  CameraComponent *camera_{nullptr};
-  lv_obj_t *canvas_obj_{nullptr};
-
-  // Video buffer system
-  struct esp_video_buffer *video_buffer_{nullptr};
-  int current_buffer_index_{0};
-  uint8_t *last_display_buffer_{nullptr};
-  
-  bool init_video_buffer_();
-  void cleanup_video_buffer_();
-  bool capture_to_video_buffer_();
-  void update_canvas_();
-
 #ifdef USE_ESP32_VARIANT_ESP32P4
-  // PPA (Pixel Processing Accelerator) pour transformations hardware
+  // V4L2 device
+  int video_fd_{-1};
+  const char *video_device_{ESP_VIDEO_MIPI_CSI_DEVICE_NAME};  // "/dev/video0"
+  
+  // Buffers mmappés (zero-copy)
+  uint8_t *mmap_buffers_[VIDEO_BUFFER_COUNT]{nullptr};
+  size_t buffer_length_{0};
+  
+  // PPA pour transformations
   ppa_client_handle_t ppa_handle_{nullptr};
   uint8_t *transform_buffer_{nullptr};
   size_t transform_buffer_size_{0};
   
+  // Méthodes V4L2
+  bool open_video_device_();
+  bool setup_buffers_();
+  bool start_streaming_();
+  bool capture_frame_();
+  void cleanup_();
+  
+  // PPA
   bool init_ppa_();
   void deinit_ppa_();
   bool transform_frame_(const uint8_t *src, uint8_t *dst);
 #endif
 
-#ifdef MIPI_DSI_CAM_ENABLE_JPEG
-  MipiDsiCamJPEGEncoder *jpeg_encoder_{nullptr};
-  void init_jpeg_encoder_();
-  void encode_jpeg_async_(const uint8_t *data, size_t size);
-#endif
-
-#ifdef MIPI_DSI_CAM_ENABLE_H264
-  MipiDsiCamH264Encoder *h264_encoder_{nullptr};
-  void init_h264_encoder_();
-  void encode_h264_async_(const uint8_t *data, size_t size);
-#endif
-
+  // Canvas LVGL
+  lv_obj_t *canvas_obj_{nullptr};
+  
   // Configuration
+  uint16_t width_{1280};
+  uint16_t height_{720};
   Rotation rotation_{ROTATION_0};
   bool mirror_x_{false};
   bool mirror_y_{false};
-  uint32_t update_interval_{33};  // ~30 FPS par défaut
-  
-  // Encodeurs
-  bool jpeg_output_{false};
-  bool h264_output_{false};
-  uint8_t jpeg_quality_{80};
-  uint32_t h264_bitrate_{2000000};  // 2 Mbps
-  uint32_t h264_gop_size_{30};
+  uint32_t update_interval_{16};  // ~60 FPS
   
   // Stats
   uint32_t frame_count_{0};
@@ -129,7 +96,8 @@ class LVGLCameraDisplay : public Component {
   
   // Flags
   bool first_update_{true};
-  bool canvas_warning_shown_{false};
+  bool streaming_{false};
+  uint8_t *last_display_buffer_{nullptr};
 };
 
 }  // namespace lvgl_camera_display
