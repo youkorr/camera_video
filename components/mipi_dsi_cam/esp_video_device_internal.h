@@ -7,7 +7,7 @@
 #pragma once
 
 #include "esp_err.h"
-#include "esp_cam_sensor_types.h"
+
 #include "driver/jpeg_encode.h"
 #include "esp_video_device.h"
 
