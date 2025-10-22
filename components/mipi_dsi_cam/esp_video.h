@@ -12,9 +12,9 @@
 #include "freertos/task.h"
 #include "freertos/semphr.h"
 #include "esp_err.h"
-#include "linux/videodev2.h"
+#include "videodev2.h"
 #include "esp_video_buffer.h"
-#include "esp_video_internal.h"
+//#include "esp_video_internal.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -542,7 +542,7 @@ esp_err_t esp_video_m2m_process(struct esp_video *video, uint32_t src_type, uint
  *      - ESP_OK on success
  *      - Others if failed
  */
-esp_err_t esp_video_set_sensor_format(struct esp_video *video, const esp_cam_sensor_format_t *format);
+//esp_err_t esp_video_set_sensor_format(struct esp_video *video, const esp_cam_sensor_format_t *format);
 
 /**
  * @brief Get format from sensor
@@ -554,7 +554,7 @@ esp_err_t esp_video_set_sensor_format(struct esp_video *video, const esp_cam_sen
  *      - ESP_OK on success
  *      - Others if failed
  */
-esp_err_t esp_video_get_sensor_format(struct esp_video *video, esp_cam_sensor_format_t *format);
+//esp_err_t esp_video_get_sensor_format(struct esp_video *video, esp_cam_sensor_format_t *format);
 
 /**
  * @brief Query menu value
