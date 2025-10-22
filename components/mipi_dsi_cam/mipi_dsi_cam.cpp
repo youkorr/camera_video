@@ -684,6 +684,7 @@ void MipiDsiCam::enable_isp_pipeline() {
   ESP_LOGW(TAG, "ISP pipeline not compiled in. Enable enable_isp_pipeline: true in your configuration.");
 }
 #endif
+
 }  // namespace mipi_dsi_cam
 }  // namespace esphome
 
