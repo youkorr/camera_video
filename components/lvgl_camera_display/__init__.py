@@ -7,7 +7,7 @@ AUTO_LOAD = ["mipi_dsi_cam"]
 
 CONF_CAMERA_ID = "camera_id"
 CONF_CANVAS_ID = "canvas_id"
-CONF_UPDATE_INTERVAL = "update_interval"
+#CONF_UPDATE_INTERVAL = "update_interval"
 #CONF_ROTATION = "rotation"
 #CONF_MIRROR_X = "mirror_x"
 #CONF_MIRROR_Y = "mirror_y"
@@ -27,7 +27,7 @@ CONFIG_SCHEMA = cv.Schema({
     cv.GenerateID(): cv.declare_id(LVGLCameraDisplay),
     cv.Required(CONF_CAMERA_ID): cv.use_id(MipiDsiCam),
     cv.Required(CONF_CANVAS_ID): cv.string,
-    cv.Optional(CONF_UPDATE_INTERVAL, default="33ms"): cv.positive_time_period_milliseconds,
+    #cv.Optional(CONF_UPDATE_INTERVAL, default="33ms"): cv.positive_time_period_milliseconds,
     #cv.Optional(CONF_ROTATION, default=0): cv.enum(ROTATION_ANGLES, int=True),
     #cv.Optional(CONF_MIRROR_X, default=False): cv.boolean,
     #cv.Optional(CONF_MIRROR_Y, default=False): cv.boolean,
@@ -45,8 +45,8 @@ async def to_code(config):
     cg.add(var.set_camera(camera))
     
     # Définir l'intervalle de mise à jour
-    update_interval_ms = config[CONF_UPDATE_INTERVAL].total_milliseconds
-    cg.add(var.set_update_interval(int(update_interval_ms)))
+    #update_interval_ms = config[CONF_UPDATE_INTERVAL].total_milliseconds
+    #cg.add(var.set_update_interval(int(update_interval_ms)))
     
     # Configuration de rotation et mirror
     #cg.add(var.set_rotation(config[CONF_ROTATION]))
@@ -66,7 +66,7 @@ async def to_code(config):
     
     cg.add(cg.RawExpression(f'''
         ESP_LOGI("compile", "LVGL Camera Display configuration:");
-        ESP_LOGI("compile", "  Update interval: {int(update_interval_ms)} ms");
+       
         
 
 
