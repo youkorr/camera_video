@@ -113,33 +113,63 @@ bool LVGLCameraDisplay::open_video_device_() {
 }
 
 bool LVGLCameraDisplay::setup_buffers_() {
-  struct v4l2_requestbuffers req;
+  // Structures V4L2 simplifiées (compatibles avec videodev2.h fourni)
+  struct {
+    __u32 count;
+    __u32 type;
+    __u32 memory;
+    __u32 reserved[2];
+  } req;
   
   // Demander les buffers
   memset(&req, 0, sizeof(req));
   req.count = VIDEO_BUFFER_COUNT;
   req.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-  req.memory = MEMORY_TYPE;
+  req.memory = V4L2_MEMORY_MMAP;
   
-  if (ioctl(this->video_fd_, VIDIOC_REQBUFS, &req) != 0) {
-    ESP_LOGE(TAG, "Failed to request buffers");
+  // VIDIOC_REQBUFS = _IOWR('V', 8, struct v4l2_requestbuffers)
+  #define VIDIOC_REQBUFS_LOCAL _IOWR('V', 8, decltype(req))
+  
+  if (ioctl(this->video_fd_, VIDIOC_REQBUFS_LOCAL, &req) != 0) {
+    ESP_LOGE(TAG, "Failed to request buffers: %d", errno);
     return false;
   }
 
   ESP_LOGI(TAG, "Requested %d buffers, got %d", VIDEO_BUFFER_COUNT, req.count);
 
+  // Structure buffer simplifiée
+  struct {
+    __u32 index;
+    __u32 type;
+    __u32 bytesused;
+    __u32 flags;
+    __u32 field;
+    struct timeval timestamp;
+    struct {
+      __u32 offset;
+      __u32 length;
+    } m;
+    __u32 length;
+    __u32 reserved2;
+    __u32 reserved;
+    __u32 memory;
+  } buf;
+  
+  // VIDIOC_QUERYBUF = _IOWR('V', 9, struct v4l2_buffer)
+  #define VIDIOC_QUERYBUF_LOCAL _IOWR('V', 9, decltype(buf))
+  // VIDIOC_QBUF = _IOWR('V', 15, struct v4l2_buffer)
+  #define VIDIOC_QBUF_LOCAL _IOWR('V', 15, decltype(buf))
+
   // Mapper chaque buffer
   for (int i = 0; i < VIDEO_BUFFER_COUNT; i++) {
-    struct v4l2_buffer buf;
-    
     memset(&buf, 0, sizeof(buf));
     buf.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-    buf.memory = MEMORY_TYPE;
+    buf.memory = V4L2_MEMORY_MMAP;
     buf.index = i;
     
     // Query buffer info
-    if (ioctl(this->video_fd_, VIDIOC_QUERYBUF, &buf) != 0) {
-      ESP_LOGE(TAG, "Failed to query buffer %d", i);
+    if (ioctl(this->video_fd_, VIDIOC_QUERYBUF_LOCAL, &buf) != 0) {
+      ESP_LOGE(TAG, "Failed to query buffer %d: %d", i, errno);
       return false;
     }
 
@@ -154,7 +184,7 @@ bool LVGLCameraDisplay::setup_buffers_() {
     );
 
     if (this->mmap_buffers_[i] == MAP_FAILED) {
-      ESP_LOGE(TAG, "Failed to mmap buffer %d", i);
+      ESP_LOGE(TAG, "Failed to mmap buffer %d: %d", i, errno);
       return false;
     }
 
@@ -163,9 +193,9 @@ bool LVGLCameraDisplay::setup_buffers_() {
     ESP_LOGI(TAG, "Buffer %d mapped at %p (size=%zu)", 
              i, this->mmap_buffers_[i], this->buffer_length_);
 
-    // Queue le buffer (le rendre disponible pour la caméra)
-    if (ioctl(this->video_fd_, VIDIOC_QBUF, &buf) != 0) {
-      ESP_LOGE(TAG, "Failed to queue buffer %d", i);
+    // Queue le buffer
+    if (ioctl(this->video_fd_, VIDIOC_QBUF_LOCAL, &buf) != 0) {
+      ESP_LOGE(TAG, "Failed to queue buffer %d: %d", i, errno);
       return false;
     }
   }
@@ -177,7 +207,7 @@ bool LVGLCameraDisplay::start_streaming_() {
   int type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
   
   if (ioctl(this->video_fd_, VIDIOC_STREAMON, &type) != 0) {
-    ESP_LOGE(TAG, "Failed to start streaming");
+    ESP_LOGE(TAG, "Failed to start streaming: %d", errno);
     return false;
   }
 
@@ -263,7 +293,7 @@ bool LVGLCameraDisplay::transform_frame_(const uint8_t *src, uint8_t *dst) {
     default:           ppa_rotation = PPA_SRM_ROTATION_ANGLE_0; break;
   }
 
-  // Configuration PPA (exactement comme votre exemple)
+  // Configuration PPA
   ppa_srm_oper_config_t srm_config = {
     .in = {
       .buffer = const_cast<uint8_t*>(src),
@@ -360,19 +390,40 @@ void LVGLCameraDisplay::loop() {
 
 #ifdef USE_ESP32_VARIANT_ESP32P4
 bool LVGLCameraDisplay::capture_frame_() {
-  struct v4l2_buffer buf;
+  // Structure buffer simplifiée
+  struct {
+    __u32 index;
+    __u32 type;
+    __u32 bytesused;
+    __u32 flags;
+    __u32 field;
+    struct timeval timestamp;
+    struct {
+      __u32 offset;
+      __u32 length;
+    } m;
+    __u32 length;
+    __u32 reserved2;
+    __u32 reserved;
+    __u32 memory;
+  } buf;
 
-  // DQBUF - Récupérer un buffer rempli (COMME DANS VOTRE EXEMPLE)
+  // VIDIOC_DQBUF = _IOWR('V', 17, struct v4l2_buffer)
+  #define VIDIOC_DQBUF_LOCAL _IOWR('V', 17, decltype(buf))
+  // VIDIOC_QBUF = _IOWR('V', 15, struct v4l2_buffer)
+  #define VIDIOC_QBUF_LOCAL _IOWR('V', 15, decltype(buf))
+
+  // DQBUF - Récupérer un buffer rempli
   memset(&buf, 0, sizeof(buf));
   buf.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-  buf.memory = MEMORY_TYPE;
+  buf.memory = V4L2_MEMORY_MMAP;
 
-  if (ioctl(this->video_fd_, VIDIOC_DQBUF, &buf) != 0) {
+  if (ioctl(this->video_fd_, VIDIOC_DQBUF_LOCAL, &buf) != 0) {
     ESP_LOGE(TAG, "Failed to dequeue buffer: %d", errno);
     return false;
   }
 
-  // Pointer vers les données (zero-copy grâce à mmap!)
+  // Pointer vers les données (zero-copy!)
   uint8_t *frame_data = this->mmap_buffers_[buf.index];
   uint16_t width = this->width_;
   uint16_t height = this->height_;
@@ -396,7 +447,7 @@ bool LVGLCameraDisplay::capture_frame_() {
     }
   }
 
-  // Mettre à jour LVGL (COMME DANS VOTRE EXEMPLE)
+  // Mettre à jour LVGL
   if (this->last_display_buffer_ != frame_data) {
     #if LV_VERSION_CHECK(9, 0, 0)
       lv_canvas_set_buffer(this->canvas_obj_, frame_data, width, height, 
@@ -410,9 +461,9 @@ bool LVGLCameraDisplay::capture_frame_() {
     lv_obj_invalidate(this->canvas_obj_);
   }
 
-  // QBUF - Remettre le buffer disponible (COMME DANS VOTRE EXEMPLE)
-  if (ioctl(this->video_fd_, VIDIOC_QBUF, &buf) != 0) {
-    ESP_LOGE(TAG, "Failed to queue buffer");
+  // QBUF - Remettre le buffer disponible
+  if (ioctl(this->video_fd_, VIDIOC_QBUF_LOCAL, &buf) != 0) {
+    ESP_LOGE(TAG, "Failed to queue buffer: %d", errno);
     return false;
   }
 
@@ -449,7 +500,9 @@ void LVGLCameraDisplay::configure_canvas(lv_obj_t *canvas) {
     // Optimisations LVGL
     lv_obj_clear_flag(canvas, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_set_style_bg_opa(canvas, LV_OPA_TRANSP, 0);
-    lv_obj_set_style_img_antialias(canvas, false, 0);
+    
+    // Note: lv_obj_set_style_img_antialias n'existe pas en LVGL v8
+    // C'est une API v9, on la retire
   }
 }
 
