@@ -163,12 +163,18 @@ class MipiDsiCam : public Component, public i2c::I2CDevice {
   float wb_green_gain_{0.9f};
   float wb_blue_gain_{1.1f};
 
+  // Adaptateurs optionnels - TOUJOURS présents comme pointeurs
+  // Utilise void* comme placeholder quand la fonctionnalité n'est pas compilée
 #ifdef MIPI_DSI_CAM_ENABLE_V4L2
   MipiDsiCamV4L2Adapter *v4l2_adapter_{nullptr};
+#else
+  void *v4l2_adapter_{nullptr};
 #endif
 
 #ifdef MIPI_DSI_CAM_ENABLE_ISP_PIPELINE
   MipiDsiCamISPPipeline *isp_pipeline_{nullptr};
+#else
+  void *isp_pipeline_{nullptr};
 #endif
   
 #ifdef USE_ESP32_VARIANT_ESP32P4
