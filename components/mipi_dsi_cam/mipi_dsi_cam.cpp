@@ -635,8 +635,9 @@ void MipiDsiCam::set_brightness_level(uint8_t level) {
   adjust_gain(gain);
 }
 
-#ifdef MIPI_DSI_CAM_ENABLE_V4L2
+// FIXED: Put #ifdef inside functions instead of having two function definitions
 void MipiDsiCam::enable_v4l2_adapter() {
+#ifdef MIPI_DSI_CAM_ENABLE_V4L2
   if (this->v4l2_adapter_) {
     ESP_LOGW(TAG, "V4L2 adapter already enabled");
     return;
@@ -653,16 +654,14 @@ void MipiDsiCam::enable_v4l2_adapter() {
   } else {
     ESP_LOGI(TAG, "✅ V4L2 adapter enabled");
   }
-}
 #else
-void MipiDsiCam::enable_v4l2_adapter() {
   // Ne touche PAS v4l2_adapter_ ici car c'est void* dans ce cas
   ESP_LOGW(TAG, "V4L2 adapter not compiled in. Enable enable_v4l2: true in your configuration.");
-}
 #endif
+}
 
-#ifdef MIPI_DSI_CAM_ENABLE_ISP_PIPELINE
 void MipiDsiCam::enable_isp_pipeline() {
+#ifdef MIPI_DSI_CAM_ENABLE_ISP_PIPELINE
   if (this->isp_pipeline_) {
     ESP_LOGW(TAG, "ISP pipeline already enabled");
     return;
@@ -679,13 +678,11 @@ void MipiDsiCam::enable_isp_pipeline() {
   } else {
     ESP_LOGI(TAG, "✅ ISP pipeline enabled");
   }
-}
 #else
-void MipiDsiCam::enable_isp_pipeline() {
   // Ne touche PAS isp_pipeline_ ici car c'est void* dans ce cas
   ESP_LOGW(TAG, "ISP pipeline not compiled in. Enable enable_isp_pipeline: true in your configuration.");
-}
 #endif
+}
 
 }  // namespace mipi_dsi_cam
 }  // namespace esphome
