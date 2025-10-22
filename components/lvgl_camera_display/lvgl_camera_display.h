@@ -19,7 +19,7 @@ namespace esphome {
 namespace lvgl_camera_display {
 
 // Configuration
-#define VIDEO_BUFFER_COUNT 3  // Triple buffering comme dans votre exemple
+#define VIDEO_BUFFER_COUNT 3  // Triple buffering
 #define MEMORY_TYPE V4L2_MEMORY_MMAP
 
 enum Rotation {
@@ -37,6 +37,7 @@ class LVGLCameraDisplay : public Component {
   float get_setup_priority() const override { return setup_priority::HARDWARE; }
 
   // Configuration
+  void set_camera(mipi_dsi_cam::MipiDsiCam *camera) { this->camera_ = camera; }
   void set_video_device(const char *dev) { this->video_device_ = dev; }
   void set_width(uint16_t width) { this->width_ = width; }
   void set_height(uint16_t height) { this->height_ = height; }
@@ -52,6 +53,8 @@ class LVGLCameraDisplay : public Component {
   uint32_t get_frame_count() const { return this->frame_count_; }
 
  protected:
+  mipi_dsi_cam::MipiDsiCam *camera_{nullptr};
+  
 #ifdef USE_ESP32_VARIANT_ESP32P4
   // V4L2 device
   int video_fd_{-1};
