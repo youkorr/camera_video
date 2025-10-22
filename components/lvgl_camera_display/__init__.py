@@ -11,8 +11,6 @@ CONF_UPDATE_INTERVAL = "update_interval"
 CONF_ROTATION = "rotation"
 CONF_MIRROR_X = "mirror_x"
 CONF_MIRROR_Y = "mirror_y"
-CONF_JPEG_OUTPUT = "jpeg_output"
-CONF_H264_OUTPUT = "h264_output"
 
 lvgl_camera_display_ns = cg.esphome_ns.namespace("lvgl_camera_display")
 LVGLCameraDisplay = lvgl_camera_display_ns.class_("LVGLCameraDisplay", cg.Component)
@@ -37,8 +35,6 @@ CONFIG_SCHEMA = cv.Schema({
     cv.Optional(CONF_ROTATION, default=0): cv.enum(ROTATION_ANGLES, int=True),
     cv.Optional(CONF_MIRROR_X, default=False): cv.boolean,
     cv.Optional(CONF_MIRROR_Y, default=False): cv.boolean,
-    cv.Optional(CONF_JPEG_OUTPUT, default=False): cv.boolean,
-    cv.Optional(CONF_H264_OUTPUT, default=False): cv.boolean,
 }).extend(cv.COMPONENT_SCHEMA)
 
 
@@ -59,16 +55,10 @@ async def to_code(config):
     cg.add(var.set_mirror_x(config[CONF_MIRROR_X]))
     cg.add(var.set_mirror_y(config[CONF_MIRROR_Y]))
     
-    # Configuration des encodeurs
-    cg.add(var.set_jpeg_output(config[CONF_JPEG_OUTPUT]))
-    cg.add(var.set_h264_output(config[CONF_H264_OUTPUT]))
-    
     # Logger la configuration
     rotation_str = f"{config[CONF_ROTATION]}°"
     mirror_x_str = "ON" if config[CONF_MIRROR_X] else "OFF"
     mirror_y_str = "ON" if config[CONF_MIRROR_Y] else "OFF"
-    jpeg_str = "enabled" if config[CONF_JPEG_OUTPUT] else "disabled"
-    h264_str = "enabled" if config[CONF_H264_OUTPUT] else "disabled"
     
     cg.add(cg.RawExpression(f'''
         ESP_LOGI("compile", "LVGL Camera Display configuration:");
@@ -76,6 +66,4 @@ async def to_code(config):
         ESP_LOGI("compile", "  Rotation: {rotation_str}");
         ESP_LOGI("compile", "  Mirror X: {mirror_x_str}");
         ESP_LOGI("compile", "  Mirror Y: {mirror_y_str}");
-        ESP_LOGI("compile", "  JPEG output: {jpeg_str}");
-        ESP_LOGI("compile", "  H264 output: {h264_str}");
     '''))
