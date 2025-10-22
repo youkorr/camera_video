@@ -107,15 +107,15 @@ class MipiDsiCam : public Component, public i2c::I2CDevice {
   void adjust_gain(uint8_t gain_index);
   void set_brightness_level(uint8_t level);
 
-#ifdef MIPI_DSI_CAM_ENABLE_V4L2
-  // Interface V4L2
+  // Interface V4L2 - Déclarations TOUJOURS présentes
   void enable_v4l2_adapter();
+#ifdef MIPI_DSI_CAM_ENABLE_V4L2
   MipiDsiCamV4L2Adapter* get_v4l2_adapter() { return this->v4l2_adapter_; }
 #endif
 
-#ifdef MIPI_DSI_CAM_ENABLE_ISP_PIPELINE
-  // Pipeline ISP avancé
+  // Pipeline ISP avancé - Déclarations TOUJOURS présentes
   void enable_isp_pipeline();
+#ifdef MIPI_DSI_CAM_ENABLE_ISP_PIPELINE
   MipiDsiCamISPPipeline* get_isp_pipeline() { return this->isp_pipeline_; }
 #endif
 
