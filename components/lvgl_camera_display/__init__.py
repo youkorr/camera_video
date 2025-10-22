@@ -9,8 +9,8 @@ CONF_CAMERA_ID = "camera_id"
 CONF_CANVAS_ID = "canvas_id"
 CONF_UPDATE_INTERVAL = "update_interval"
 CONF_ROTATION = "rotation"
-CONF_MIRROR_X = "mirror_x"
-CONF_MIRROR_Y = "mirror_y"
+#CONF_MIRROR_X = "mirror_x"
+#CONF_MIRROR_Y = "mirror_y"
 #CONF_JPEG_OUTPUT = "jpeg_output"
 #CONF_H264_OUTPUT = "h264_output"
 
@@ -35,8 +35,8 @@ CONFIG_SCHEMA = cv.Schema({
     cv.Required(CONF_CANVAS_ID): cv.string,
     cv.Optional(CONF_UPDATE_INTERVAL, default="33ms"): cv.positive_time_period_milliseconds,
     cv.Optional(CONF_ROTATION, default=0): cv.enum(ROTATION_ANGLES, int=True),
-    cv.Optional(CONF_MIRROR_X, default=False): cv.boolean,
-    cv.Optional(CONF_MIRROR_Y, default=False): cv.boolean,
+    #cv.Optional(CONF_MIRROR_X, default=False): cv.boolean,
+    #cv.Optional(CONF_MIRROR_Y, default=False): cv.boolean,
     #cv.Optional(CONF_JPEG_OUTPUT, default=False): cv.boolean,
     #cv.Optional(CONF_H264_OUTPUT, default=False): cv.boolean,
 }).extend(cv.COMPONENT_SCHEMA)
@@ -65,8 +65,8 @@ async def to_code(config):
     
     # Logger la configuration
     rotation_str = f"{config[CONF_ROTATION]}°"
-    mirror_x_str = "ON" if config[CONF_MIRROR_X] else "OFF"
-    mirror_y_str = "ON" if config[CONF_MIRROR_Y] else "OFF"
+    #mirror_x_str = "ON" if config[CONF_MIRROR_X] else "OFF"
+    #mirror_y_str = "ON" if config[CONF_MIRROR_Y] else "OFF"
     #jpeg_str = "enabled" if config[CONF_JPEG_OUTPUT] else "disabled"
     #h264_str = "enabled" if config[CONF_H264_OUTPUT] else "disabled"
     
@@ -74,7 +74,6 @@ async def to_code(config):
         ESP_LOGI("compile", "LVGL Camera Display configuration:");
         ESP_LOGI("compile", "  Update interval: {int(update_interval_ms)} ms");
         ESP_LOGI("compile", "  Rotation: {rotation_str}");
-        ESP_LOGI("compile", "  Mirror X: {mirror_x_str}");
-        ESP_LOGI("compile", "  Mirror Y: {mirror_y_str}");
+
 
     '''))
