@@ -638,48 +638,52 @@ void MipiDsiCam::set_brightness_level(uint8_t level) {
 // FIXED: Put #ifdef inside functions instead of having two function definitions
 void MipiDsiCam::enable_v4l2_adapter() {
 #ifdef MIPI_DSI_CAM_ENABLE_V4L2
-  if (this->v4l2_adapter_) {
+  if (this->v4l2_adapter_ != nullptr) {
     ESP_LOGW(TAG, "V4L2 adapter already enabled");
     return;
   }
   
   ESP_LOGI(TAG, "Enabling V4L2 adapter...");
-  this->v4l2_adapter_ = new MipiDsiCamV4L2Adapter(this);
   
-  esp_err_t ret = this->v4l2_adapter_->init();
+  // Create and initialize the V4L2 adapter
+  MipiDsiCamV4L2Adapter* adapter = new MipiDsiCamV4L2Adapter(this);
+  esp_err_t ret = adapter->init();
+  
   if (ret != ESP_OK) {
-    ESP_LOGE(TAG, "Failed to initialize V4L2 adapter");
-    delete this->v4l2_adapter_;
+    ESP_LOGE(TAG, "Failed to initialize V4L2 adapter: 0x%x", ret);
+    delete adapter;
     this->v4l2_adapter_ = nullptr;
   } else {
+    this->v4l2_adapter_ = adapter; // Store as void* - this is safe
     ESP_LOGI(TAG, "✅ V4L2 adapter enabled");
   }
 #else
-  // Ne touche PAS v4l2_adapter_ ici car c'est void* dans ce cas
   ESP_LOGW(TAG, "V4L2 adapter not compiled in. Enable enable_v4l2: true in your configuration.");
 #endif
 }
 
 void MipiDsiCam::enable_isp_pipeline() {
 #ifdef MIPI_DSI_CAM_ENABLE_ISP_PIPELINE
-  if (this->isp_pipeline_) {
+  if (this->isp_pipeline_ != nullptr) {
     ESP_LOGW(TAG, "ISP pipeline already enabled");
     return;
   }
   
   ESP_LOGI(TAG, "Enabling ISP pipeline...");
-  this->isp_pipeline_ = new MipiDsiCamISPPipeline(this);
   
-  esp_err_t ret = this->isp_pipeline_->init();
+  // Create and initialize the ISP pipeline
+  MipiDsiCamISPPipeline* pipeline = new MipiDsiCamISPPipeline(this);
+  esp_err_t ret = pipeline->init();
+  
   if (ret != ESP_OK) {
-    ESP_LOGE(TAG, "Failed to initialize ISP pipeline");
-    delete this->isp_pipeline_;
+    ESP_LOGE(TAG, "Failed to initialize ISP pipeline: 0x%x", ret);
+    delete pipeline;
     this->isp_pipeline_ = nullptr;
   } else {
+    this->isp_pipeline_ = pipeline; // Store as void* - this is safe
     ESP_LOGI(TAG, "✅ ISP pipeline enabled");
   }
 #else
-  // Ne touche PAS isp_pipeline_ ici car c'est void* dans ce cas
   ESP_LOGW(TAG, "ISP pipeline not compiled in. Enable enable_isp_pipeline: true in your configuration.");
 #endif
 }
