@@ -627,6 +627,52 @@ void MipiDsiCam::set_brightness_level(uint8_t level) {
   adjust_gain(gain);
 }
 
+#ifdef MIPI_DSI_CAM_ENABLE_V4L2
+#include "mipi_dsi_cam_v4l2_adapter.h"
+
+void MipiDsiCam::enable_v4l2_adapter() {
+  if (this->v4l2_adapter_) {
+    ESP_LOGW(TAG, "V4L2 adapter already enabled");
+    return;
+  }
+  
+  ESP_LOGI(TAG, "Enabling V4L2 adapter...");
+  this->v4l2_adapter_ = new MipiDsiCamV4L2Adapter(this);
+  
+  esp_err_t ret = this->v4l2_adapter_->init();
+  if (ret != ESP_OK) {
+    ESP_LOGE(TAG, "Failed to initialize V4L2 adapter");
+    delete this->v4l2_adapter_;
+    this->v4l2_adapter_ = nullptr;
+  } else {
+    ESP_LOGI(TAG, "✅ V4L2 adapter enabled");
+  }
+}
+#endif
+
+#ifdef MIPI_DSI_CAM_ENABLE_ISP_PIPELINE
+#include "mipi_dsi_cam_isp_pipeline.h"
+
+void MipiDsiCam::enable_isp_pipeline() {
+  if (this->isp_pipeline_) {
+    ESP_LOGW(TAG, "ISP pipeline already enabled");
+    return;
+  }
+  
+  ESP_LOGI(TAG, "Enabling ISP pipeline...");
+  this->isp_pipeline_ = new MipiDsiCamISPPipeline(this);
+  
+  esp_err_t ret = this->isp_pipeline_->init();
+  if (ret != ESP_OK) {
+    ESP_LOGE(TAG, "Failed to initialize ISP pipeline");
+    delete this->isp_pipeline_;
+    this->isp_pipeline_ = nullptr;
+  } else {
+    ESP_LOGI(TAG, "✅ ISP pipeline enabled");
+  }
+}
+#endif
+
 }  // namespace mipi_dsi_cam
 }  // namespace esphome
 
