@@ -635,7 +635,6 @@ void MipiDsiCam::set_brightness_level(uint8_t level) {
   adjust_gain(gain);
 }
 
-// FIXED: Put #ifdef inside functions instead of having two function definitions
 void MipiDsiCam::enable_v4l2_adapter() {
 #ifdef MIPI_DSI_CAM_ENABLE_V4L2
   if (this->v4l2_adapter_ != nullptr) {
@@ -644,21 +643,19 @@ void MipiDsiCam::enable_v4l2_adapter() {
   }
   
   ESP_LOGI(TAG, "Enabling V4L2 adapter...");
+  this->v4l2_adapter_ = new MipiDsiCamV4L2Adapter(this);
   
-  // Create and initialize the V4L2 adapter
-  MipiDsiCamV4L2Adapter* adapter = new MipiDsiCamV4L2Adapter(this);
-  esp_err_t ret = adapter->init();
-  
+  esp_err_t ret = this->v4l2_adapter_->init();
   if (ret != ESP_OK) {
     ESP_LOGE(TAG, "Failed to initialize V4L2 adapter: 0x%x", ret);
-    delete adapter;
+    delete this->v4l2_adapter_;
     this->v4l2_adapter_ = nullptr;
   } else {
-    this->v4l2_adapter_ = adapter; // Store as void* - this is safe
     ESP_LOGI(TAG, "✅ V4L2 adapter enabled");
   }
 #else
   ESP_LOGW(TAG, "V4L2 adapter not compiled in. Enable enable_v4l2: true in your configuration.");
+  // Ne rien faire avec v4l2_adapter_ car c'est un void* dans ce cas
 #endif
 }
 
@@ -670,21 +667,19 @@ void MipiDsiCam::enable_isp_pipeline() {
   }
   
   ESP_LOGI(TAG, "Enabling ISP pipeline...");
+  this->isp_pipeline_ = new MipiDsiCamISPPipeline(this);
   
-  // Create and initialize the ISP pipeline
-  MipiDsiCamISPPipeline* pipeline = new MipiDsiCamISPPipeline(this);
-  esp_err_t ret = pipeline->init();
-  
+  esp_err_t ret = this->isp_pipeline_->init();
   if (ret != ESP_OK) {
     ESP_LOGE(TAG, "Failed to initialize ISP pipeline: 0x%x", ret);
-    delete pipeline;
+    delete this->isp_pipeline_;
     this->isp_pipeline_ = nullptr;
   } else {
-    this->isp_pipeline_ = pipeline; // Store as void* - this is safe
     ESP_LOGI(TAG, "✅ ISP pipeline enabled");
   }
 #else
   ESP_LOGW(TAG, "ISP pipeline not compiled in. Enable enable_isp_pipeline: true in your configuration.");
+  // Ne rien faire avec isp_pipeline_ car c'est un void* dans ce cas
 #endif
 }
 
