@@ -3,7 +3,7 @@ SENSOR_INFO = {
     'manufacturer': 'OmniVision',
     'pid': 0x5602,
     'i2c_address': 0x36,
-    'lane_count': 1,  # 1 lane pour le capteur original
+    'lane_count': 2,  # 1 lane pour le capteur original
     'bayer_pattern': 1,  # GBRG (ESP_CAM_SENSOR_BAYER_GBRG)
     'lane_bitrate_mbps': 400,  # 100MHz * 4 = 400 Mbps
     'width': 1288,
