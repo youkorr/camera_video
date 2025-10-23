@@ -155,9 +155,9 @@ CONFIG_SCHEMA = cv.Schema(
         cv.Optional(CONF_FRAMERATE): cv.int_range(min=1, max=60),
         cv.Optional(CONF_JPEG_QUALITY, default=10): cv.int_range(min=1, max=63),
         
-        # Options V4L2 et encoders
-        cv.Optional(CONF_ENABLE_V4L2, default=False): cv.boolean,
-        cv.Optional(CONF_ENABLE_ISP_PIPELINE, default=False): cv.boolean,
+        # Options V4L2 et encoders - V4L2 et ISP activés par défaut
+        cv.Optional(CONF_ENABLE_V4L2, default=True): cv.boolean,
+        cv.Optional(CONF_ENABLE_ISP_PIPELINE, default=True): cv.boolean,
         cv.Optional(CONF_ENABLE_JPEG_ENCODER, default=False): cv.boolean,
         cv.Optional(CONF_ENABLE_H264_ENCODER, default=False): cv.boolean,
     }
@@ -222,18 +222,21 @@ async def to_code(config):
         reset_pin = await cg.gpio_pin_expression(config[CONF_RESET_PIN])
         cg.add(var.set_reset_pin(reset_pin))
     
-    # Activer les fonctionnalités V4L2
-    enable_v4l2 = config.get(CONF_ENABLE_V4L2, False)
-    enable_isp = config.get(CONF_ENABLE_ISP_PIPELINE, False)
+    # Activer les fonctionnalités - V4L2 et ISP TOUJOURS compilés
+    enable_v4l2 = config.get(CONF_ENABLE_V4L2, True)
+    enable_isp = config.get(CONF_ENABLE_ISP_PIPELINE, True)
     enable_jpeg = config.get(CONF_ENABLE_JPEG_ENCODER, False)
     enable_h264 = config.get(CONF_ENABLE_H264_ENCODER, False)
     
+    # Toujours ajouter ces defines (toujours disponibles)
+    cg.add_define("MIPI_DSI_CAM_ENABLE_V4L2")
+    cg.add_define("MIPI_DSI_CAM_ENABLE_ISP_PIPELINE")
+    
+    # Les initialiser automatiquement si demandé
     if enable_v4l2:
-        cg.add_define("MIPI_DSI_CAM_ENABLE_V4L2")
         cg.add(var.enable_v4l2_adapter())
     
     if enable_isp:
-        cg.add_define("MIPI_DSI_CAM_ENABLE_ISP_PIPELINE")
         cg.add(var.enable_isp_pipeline())
     
     if enable_jpeg:
