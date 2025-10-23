@@ -16,6 +16,39 @@
 #include "esp_cache.h"
 #endif
 
+#include "hal/hal_esp32.h"
+#include "../utils/task_controller/task_controller.h"
+#include <mooncake_log.h>
+#include <vector>
+#include <driver/gpio.h>
+#include <memory>
+#include "bsp/esp-bsp.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+#include "esp_event.h"
+#include "esp_err.h"
+#include "esp_log.h"
+#include "esp_timer.h"
+#include <string.h>
+#include <fcntl.h>
+#include <sys/ioctl.h>
+
+#include <sys/param.h>
+#include <sys/errno.h>
+
+#include "esp_video_init.h"
+
+#include "driver/i2c_master.h"
+#include "driver/ppa.h"
+#include "imlib.h"
+#include "freertos/queue.h"
+#include "mman.h"
+#include "../mipi_dsi_cam/videodev2.h"
+#include "../mipi_dsi_cam/esp_video_device.h"
+#include "../mipi_dsi_cam/mipi_dsi_cam.h"
+#include "driver/ppa.h"
+#include "esp_cache.h"
+#endif
 namespace esphome {
 namespace lvgl_camera_display {
 
