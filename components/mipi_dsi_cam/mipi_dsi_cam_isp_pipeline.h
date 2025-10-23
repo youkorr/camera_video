@@ -1,6 +1,6 @@
 #pragma once
 
-#ifdef MIPI_DSI_CAM_ENABLE_ISP_PIPELINE
+//#ifdef MIPI_DSI_CAM_ENABLE_ISP_PIPELINE
 
 #include "mipi_dsi_cam.h"
 
@@ -289,4 +289,4 @@ class MipiDsiCamISPPipeline {
 } // namespace esphome
 
 #endif // USE_ESP32_VARIANT_ESP32P4
-#endif // MIPI_DSI_CAM_ENABLE_ISP_PIPELINE
+//#endif // MIPI_DSI_CAM_ENABLE_ISP_PIPELINE
