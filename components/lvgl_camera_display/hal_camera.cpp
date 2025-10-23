@@ -1,7 +1,7 @@
 
 #pragma once
 
-#include "hal/hal_esp32.h"
+
 #include "../utils/task_controller/task_controller.h"
 #include <mooncake_log.h>
 #include <vector>
