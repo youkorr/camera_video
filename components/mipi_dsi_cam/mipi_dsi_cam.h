@@ -14,22 +14,13 @@ extern "C" {
 }
 #endif
 
-// Forward declarations pour V4L2
-#ifdef MIPI_DSI_CAM_ENABLE_V4L2
+// Forward declarations pour V4L2 et ISP - TOUJOURS disponibles
 namespace esphome {
 namespace mipi_dsi_cam {
 class MipiDsiCamV4L2Adapter;
-}
-}
-#endif
-
-#ifdef MIPI_DSI_CAM_ENABLE_ISP_PIPELINE
-namespace esphome {
-namespace mipi_dsi_cam {
 class MipiDsiCamISPPipeline;
 }
 }
-#endif
 
 namespace esphome {
 namespace mipi_dsi_cam {
@@ -94,6 +85,7 @@ class MipiDsiCam : public Component, public i2c::I2CDevice {
   size_t get_image_size() const { return this->frame_buffer_size_; }
   uint16_t get_image_width() const { return this->width_; }
   uint16_t get_image_height() const { return this->height_; }
+  std::string get_name() const { return this->name_; }
   
   bool has_external_clock() const { return this->external_clock_pin_ >= 0; }
 
@@ -107,17 +99,12 @@ class MipiDsiCam : public Component, public i2c::I2CDevice {
   void adjust_gain(uint8_t gain_index);
   void set_brightness_level(uint8_t level);
 
-  // Interface V4L2 - Déclarations TOUJOURS présentes
+  // Interface V4L2 et ISP Pipeline - TOUJOURS disponibles
   void enable_v4l2_adapter();
-#ifdef MIPI_DSI_CAM_ENABLE_V4L2
-  MipiDsiCamV4L2Adapter* get_v4l2_adapter() { return this->v4l2_adapter_; }
-#endif
-
-  // Pipeline ISP avancé - Déclarations TOUJOURS présentes
   void enable_isp_pipeline();
-#ifdef MIPI_DSI_CAM_ENABLE_ISP_PIPELINE
+  
+  MipiDsiCamV4L2Adapter* get_v4l2_adapter() { return this->v4l2_adapter_; }
   MipiDsiCamISPPipeline* get_isp_pipeline() { return this->isp_pipeline_; }
-#endif
 
  protected:
   int8_t external_clock_pin_{-1};
@@ -163,19 +150,9 @@ class MipiDsiCam : public Component, public i2c::I2CDevice {
   float wb_green_gain_{0.9f};
   float wb_blue_gain_{1.1f};
 
-  // Adaptateurs optionnels - TOUJOURS présents comme pointeurs
-  // Utilise void* comme placeholder quand la fonctionnalité n'est pas compilée
-#ifdef MIPI_DSI_CAM_ENABLE_V4L2
+  // Adaptateurs V4L2 et ISP - TOUJOURS disponibles
   MipiDsiCamV4L2Adapter *v4l2_adapter_{nullptr};
-#else
-  void *v4l2_adapter_{nullptr};
-#endif
-
-#ifdef MIPI_DSI_CAM_ENABLE_ISP_PIPELINE
   MipiDsiCamISPPipeline *isp_pipeline_{nullptr};
-#else
-  void *isp_pipeline_{nullptr};
-#endif
   
 #ifdef USE_ESP32_VARIANT_ESP32P4
   esp_cam_ctlr_handle_t csi_handle_{nullptr};
