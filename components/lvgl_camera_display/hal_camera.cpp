@@ -1,7 +1,6 @@
 
 #pragma once
 
-#include <mooncake_log.h>
 #include <vector>
 #include <driver/gpio.h>
 #include <memory>
