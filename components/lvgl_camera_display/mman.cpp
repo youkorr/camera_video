@@ -4,7 +4,9 @@
 
 #include <fcntl.h>
 #include <errno.h>
+#include <cstring>  // Pour memset
 #include "esp_log.h"
+#include "esp_heap_caps.h"  // Pour heap_caps_aligned_alloc et les MALLOC_CAP_*
 
 static const char *TAG = "mman";
 
