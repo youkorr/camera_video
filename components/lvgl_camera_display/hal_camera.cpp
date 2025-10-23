@@ -1,21 +1,6 @@
 
 #pragma once
 
-#include "esphome/core/component.h"
-#include "esphome/core/hal.h"
-#include "esphome/components/lvgl/lvgl_esphome.h"
-#include "lvgl_camera_display.h"
-#ifdef USE_ESP32_VARIANT_ESP32P4
-#include <fcntl.h>
-#include <sys/ioctl.h>
-#include "mman.h"
-#include "../mipi_dsi_cam/videodev2.h"
-#include "../mipi_dsi_cam/esp_video_device.h"
-#include "../mipi_dsi_cam/mipi_dsi_cam.h"
-#include "driver/ppa.h"
-#include "esp_cache.h"
-#endif
-
 #include "hal/hal_esp32.h"
 #include "../utils/task_controller/task_controller.h"
 #include <mooncake_log.h>
@@ -36,7 +21,7 @@
 #include <sys/param.h>
 #include <sys/errno.h>
 
-#include "esp_video_init.h"
+#include "../mipi_dsi_cam/esp_video_init.h"
 
 #include "driver/i2c_master.h"
 #include "driver/ppa.h"
