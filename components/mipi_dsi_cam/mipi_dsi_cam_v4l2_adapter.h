@@ -1,6 +1,6 @@
 #pragma once
 
-#ifdef MIPI_DSI_CAM_ENABLE_V4L2
+//#ifdef MIPI_DSI_CAM_ENABLE_V4L2
 
 #include "mipi_dsi_cam.h"
 
@@ -144,4 +144,4 @@ class MipiDsiCamV4L2Adapter {
 } // namespace esphome
 
 #endif // USE_ESP32_VARIANT_ESP32P4
-#endif // MIPI_DSI_CAM_ENABLE_V4L2
+//#endif // MIPI_DSI_CAM_ENABLE_V4L2
