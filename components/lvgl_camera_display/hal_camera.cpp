@@ -4,7 +4,6 @@
 #include <vector>
 #include <driver/gpio.h>
 #include <memory>
-#include "bsp/esp-bsp.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "esp_event.h"
