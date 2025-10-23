@@ -12,7 +12,7 @@
 #include "esp_timer.h"
 #include <string.h>
 #include <fcntl.h>
-#include <sys/ioctl.h>
+#include "ioctl.h"
 
 #include <sys/param.h>
 #include <sys/errno.h>
@@ -21,7 +21,6 @@
 
 #include "driver/i2c_master.h"
 #include "driver/ppa.h"
-#include "imlib.h"
 #include "freertos/queue.h"
 #include "mman.h"
 #include "../mipi_dsi_cam/videodev2.h"
