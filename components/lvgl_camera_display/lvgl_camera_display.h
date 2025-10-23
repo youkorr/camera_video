@@ -6,8 +6,8 @@
 
 #ifdef USE_ESP32_VARIANT_ESP32P4
 #include <fcntl.h>
-//#include <sys/ioctl.h>
-#include "ioctl.h"
+#include <sys/ioctl.h>
+//#include "ioctl.h"
 #include "mman.h"
 #include "../mipi_dsi_cam/videodev2.h"
 #include "../mipi_dsi_cam/esp_video_device.h"
@@ -92,7 +92,7 @@ class LVGLCameraDisplay : public Component {
   Rotation rotation_{ROTATION_0};
   bool mirror_x_{false};
   bool mirror_y_{false};
-  uint32_t update_interval_{16};  // ~60 FPS
+  uint32_t update_interval_{33};  // ~30 FPS
   
   // Stats
   uint32_t frame_count_{0};
