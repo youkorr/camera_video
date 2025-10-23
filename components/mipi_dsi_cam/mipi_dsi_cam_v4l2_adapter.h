@@ -55,11 +55,9 @@ class MipiDsiCamV4L2Adapter {
    */
   bool is_initialized() const { return this->context_.video_device != nullptr; }
   
- protected:
-  MipiCameraV4L2Context context_;
-  
   // ===== Callbacks V4L2 pour le driver =====
   // Ces fonctions sont appelées par le framework V4L2 d'ESP-IDF
+  // IMPORTANT: Elles doivent être publiques pour être utilisées dans esp_video_ops
   
   /**
    * @brief Initialise le device V4L2
@@ -138,6 +136,9 @@ class MipiDsiCamV4L2Adapter {
    * @brief Récupère les paramètres du capteur
    */
   static esp_err_t v4l2_get_sensor_format(void *video, void *format);
+
+ protected:
+  MipiCameraV4L2Context context_;
 };
 
 } // namespace mipi_dsi_cam
