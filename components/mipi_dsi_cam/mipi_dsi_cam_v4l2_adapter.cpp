@@ -1,4 +1,4 @@
-#ifdef MIPI_DSI_CAM_ENABLE_V4L2
+//#ifdef MIPI_DSI_CAM_ENABLE_V4L2
 
 #include "mipi_dsi_cam_v4l2_adapter.h"
 #include "esphome/core/log.h"
@@ -409,4 +409,4 @@ esp_err_t MipiDsiCamV4L2Adapter::v4l2_get_sensor_format(void *video, void *forma
 } // namespace esphome
 
 #endif // USE_ESP32_VARIANT_ESP32P4
-#endif // MIPI_DSI_CAM_ENABLE_V4L2
+//#endif // MIPI_DSI_CAM_ENABLE_V4L2
