@@ -12,21 +12,13 @@
 #include "../mipi_dsi_cam/videodev2.h"
 #include "../mipi_dsi_cam/esp_video_device.h"
 #include "../mipi_dsi_cam/mipi_dsi_cam.h"
-#include "../mipi_dsi_cam/videodev2.h"
-
 #include "driver/ppa.h"
 #include "esp_cache.h"
+#endif
 
-#include <fcntl.h>
-#include <unistd.h>
-
-#include "ioctl.h"
-#include "mman.h"
-#else
 namespace mipi_dsi_cam {
 class MipiDsiCam;
 }
-#endif
 
 #include <cstddef>
 #include <cstdint>
@@ -45,10 +37,9 @@ enum Rotation {
   ROTATION_270 = 270
 static constexpr size_t kVideoBufferCount = 3;  // Triple buffering
 
-#ifdef USE_ESP32_VARIANT_ESP32P4
+#ifdef ESP_VIDEO_MIPI_CSI_DEVICE_NAME
 constexpr const char *kDefaultVideoDevice = ESP_VIDEO_MIPI_CSI_DEVICE_NAME;
 #else
-using ppa_client_handle_t = void *;
 constexpr const char *kDefaultVideoDevice = "/dev/video0";
 #endif
 
@@ -109,12 +100,12 @@ class LVGLCameraDisplay : public Component {
   size_t buffer_count_{0};
 
   // PPA pour transformations
+#ifdef USE_ESP32_VARIANT_ESP32P4
   ppa_client_handle_t ppa_handle_{nullptr};
   uint8_t *transform_buffer_{nullptr};
   size_t transform_buffer_size_{0};
   
 
-#ifdef USE_ESP32_VARIANT_ESP32P4
   // Méthodes V4L2
   bool open_video_device_();
   bool setup_buffers_();
