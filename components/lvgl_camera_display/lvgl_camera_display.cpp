@@ -58,16 +58,18 @@ void LVGLCameraDisplay::setup() {
 
   // Initialiser PPA si transformations
   if (this->rotation_ != ROTATION_0 || this->mirror_x_ || this->mirror_y_) {
+  if (this->rotation_ != Rotation::DEG_0 || this->mirror_x_ || this->mirror_y_) {
     if (!this->init_ppa_()) {
       ESP_LOGE(TAG, "❌ Failed to initialize PPA");
       this->cleanup_();
       this->mark_failed();
       return;
     }
-
     ESP_LOGI(TAG, "✅ PPA initialized (rotation=%d°, mirror_x=%s, mirror_y=%s)",
              this->rotation_, this->mirror_x_ ? "ON" : "OFF", 
-             this->rotation_, this->mirror_x_ ? "ON" : "OFF",
+
+    ESP_LOGI(TAG, "✅ PPA initialized (rotation=%u°, mirror_x=%s, mirror_y=%s)",
+             to_degrees(this->rotation_), this->mirror_x_ ? "ON" : "OFF",
              this->mirror_y_ ? "ON" : "OFF");
   }
 
@@ -351,8 +353,9 @@ bool LVGLCameraDisplay::init_ppa_() {
   uint16_t height = this->height_;
   
   // Ajuster dimensions selon rotation
-
   if (this->rotation_ == ROTATION_90 || this->rotation_ == ROTATION_270) {
+
+  if (this->rotation_ == Rotation::DEG_90 || this->rotation_ == Rotation::DEG_270) {
     std::swap(width, height);
   }
 
@@ -403,6 +406,7 @@ bool LVGLCameraDisplay::transform_frame_(const uint8_t *src, uint8_t *dst) {
   uint16_t dst_height = src_height;
 
   if (this->rotation_ == ROTATION_90 || this->rotation_ == ROTATION_270) {
+  if (this->rotation_ == Rotation::DEG_90 || this->rotation_ == Rotation::DEG_270) {
     std::swap(dst_width, dst_height);
   }
 
@@ -414,6 +418,21 @@ bool LVGLCameraDisplay::transform_frame_(const uint8_t *src, uint8_t *dst) {
     case ROTATION_180: ppa_rotation = PPA_SRM_ROTATION_ANGLE_180; break;
     case ROTATION_270: ppa_rotation = PPA_SRM_ROTATION_ANGLE_270; break;
     default:           ppa_rotation = PPA_SRM_ROTATION_ANGLE_0; break;
+    case Rotation::DEG_0:
+      ppa_rotation = PPA_SRM_ROTATION_ANGLE_0;
+      break;
+    case Rotation::DEG_90:
+      ppa_rotation = PPA_SRM_ROTATION_ANGLE_90;
+      break;
+    case Rotation::DEG_180:
+      ppa_rotation = PPA_SRM_ROTATION_ANGLE_180;
+      break;
+    case Rotation::DEG_270:
+      ppa_rotation = PPA_SRM_ROTATION_ANGLE_270;
+      break;
+    default:
+      ppa_rotation = PPA_SRM_ROTATION_ANGLE_0;
+      break;
   }
 
   // Configuration PPA
@@ -602,8 +621,9 @@ bool LVGLCameraDisplay::capture_frame_() {
     if (this->transform_frame_(frame_data, this->transform_buffer_)) {
       frame_data = this->transform_buffer_;
       
-
       if (this->rotation_ == ROTATION_90 || this->rotation_ == ROTATION_270) {
+
+      if (this->rotation_ == Rotation::DEG_90 || this->rotation_ == Rotation::DEG_270) {
         std::swap(width, height);
       }
     }
@@ -694,6 +714,7 @@ void LVGLCameraDisplay::dump_config() {
 #endif
   ESP_LOGCONFIG(TAG, "  Canvas: %s", this->canvas_obj_ ? "YES" : "NO");
   ESP_LOGCONFIG(TAG, "  Rotation: %d°", this->rotation_);
+  ESP_LOGCONFIG(TAG, "  Rotation: %u°", to_degrees(this->rotation_));
   ESP_LOGCONFIG(TAG, "  Mirror X: %s", this->mirror_x_ ? "YES" : "NO");
   ESP_LOGCONFIG(TAG, "  Mirror Y: %s", this->mirror_y_ ? "YES" : "NO");
   ESP_LOGCONFIG(TAG, "  Update interval: %u ms", this->update_interval_);
