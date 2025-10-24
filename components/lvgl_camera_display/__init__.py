@@ -16,11 +16,16 @@ lvgl_camera_display_ns = cg.esphome_ns.namespace("lvgl_camera_display")
 LVGLCameraDisplay = lvgl_camera_display_ns.class_("LVGLCameraDisplay", cg.Component)
 
 RotationAngle = lvgl_camera_display_ns.enum("RotationAngle")
+Rotation = lvgl_camera_display_ns.enum("Rotation")
 ROTATION_ANGLES = {
     0: RotationAngle.ROTATION_0,
     90: RotationAngle.ROTATION_90,
     180: RotationAngle.ROTATION_180,
     270: RotationAngle.ROTATION_270,
+    0: Rotation.DEG_0,
+    90: Rotation.DEG_90,
+    180: Rotation.DEG_180,
+    270: Rotation.DEG_270,
 }
 
 # Import du namespace mipi_dsi_cam
@@ -45,25 +50,3 @@ async def to_code(config):
     # Lier à la caméra
     camera = await cg.get_variable(config[CONF_CAMERA_ID])
     cg.add(var.set_camera(camera))
-    
-    # Définir l'intervalle de mise à jour
-    update_interval_ms = config[CONF_UPDATE_INTERVAL].total_milliseconds
-    cg.add(var.set_update_interval(int(update_interval_ms)))
-    
-    # Configuration de rotation et mirror
-    cg.add(var.set_rotation(config[CONF_ROTATION]))
-    cg.add(var.set_mirror_x(config[CONF_MIRROR_X]))
-    cg.add(var.set_mirror_y(config[CONF_MIRROR_Y]))
-    
-    # Logger la configuration
-    rotation_str = f"{config[CONF_ROTATION]}°"
-    mirror_x_str = "ON" if config[CONF_MIRROR_X] else "OFF"
-    mirror_y_str = "ON" if config[CONF_MIRROR_Y] else "OFF"
-    
-    cg.add(cg.RawExpression(f'''
-        ESP_LOGI("compile", "LVGL Camera Display configuration:");
-        ESP_LOGI("compile", "  Update interval: {int(update_interval_ms)} ms");
-        ESP_LOGI("compile", "  Rotation: {rotation_str}");
-        ESP_LOGI("compile", "  Mirror X: {mirror_x_str}");
-        ESP_LOGI("compile", "  Mirror Y: {mirror_y_str}");
-    '''))
