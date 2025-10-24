@@ -1,54 +1,26 @@
 #pragma once
 
-#include <stdint.h>
-#include <sys/types.h>
+// Ne redéclare ioctl que s'il n'est pas déjà défini par ESP-IDF
+#ifndef _SYS_IOCTL_H_  // vérifie si ESP-IDF l'a déjà inclus
+#define _SYS_IOCTL_H_
+
+// Si tu veux fournir des constantes VIDIOC_* etc. mets-les ici
+#include "../mipi_dsi_cam/videodev2.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-// -----------------------------------------------------------------------------
-// Simulation minimale de <sys/ioctl.h> pour compilation ESP-IDF
-// -----------------------------------------------------------------------------
-
-// Signature de la fonction ioctl()
-// (Déclaration vide – l'implémentation est fournie par le driver vidéo interne)
-int ioctl(int fd, unsigned long request, ...);
-
-// Macros utilitaires utilisées par V4L2
-#ifndef _IOC
-#define _IOC_NRBITS   8
-#define _IOC_TYPEBITS 8
-#define _IOC_SIZEBITS 14
-#define _IOC_DIRBITS  2
-
-#define _IOC_NRMASK   ((1 << _IOC_NRBITS)-1)
-#define _IOC_TYPEMASK ((1 << _IOC_TYPEBITS)-1)
-#define _IOC_SIZEMASK ((1 << _IOC_SIZEBITS)-1)
-#define _IOC_DIRMASK  ((1 << _IOC_DIRBITS)-1)
-
-#define _IOC_NRSHIFT   0
-#define _IOC_TYPESHIFT (_IOC_NRSHIFT+_IOC_NRBITS)
-#define _IOC_SIZESHIFT (_IOC_TYPESHIFT+_IOC_TYPEBITS)
-#define _IOC_DIRSHIFT  (_IOC_SIZESHIFT+_IOC_SIZEBITS)
-
-#define _IOC_NONE  0U
-#define _IOC_WRITE 1U
-#define _IOC_READ  2U
-
-#define _IOC(dir,type,nr,size) \
-  (((dir)  << _IOC_DIRSHIFT) | \
-   ((type) << _IOC_TYPESHIFT) | \
-   ((nr)   << _IOC_NRSHIFT) | \
-   ((size) << _IOC_SIZESHIFT))
-
-#define _IO(type,nr)           _IOC(_IOC_NONE,(type),(nr),0)
-#define _IOR(type,nr,size)     _IOC(_IOC_READ,(type),(nr),sizeof(size))
-#define _IOW(type,nr,size)     _IOC(_IOC_WRITE,(type),(nr),sizeof(size))
-#define _IOWR(type,nr,size)    _IOC(_IOC_READ|_IOC_WRITE,(type),(nr),sizeof(size))
+// Ne redéclare PAS ioctl s’il est déjà défini
+#ifndef _IOCTL_ALREADY_DECLARED
+#define _IOCTL_ALREADY_DECLARED
+int ioctl(int fd, int request, ...);  // signature conforme à ESP-IDF
 #endif
 
 #ifdef __cplusplus
 }
 #endif
+
+#endif // _SYS_IOCTL_H_
+
 
