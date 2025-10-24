@@ -84,7 +84,7 @@ void LVGLCameraDisplay::setup() {
   ESP_LOGI(TAG, "   Buffers: %d (mmap zero-copy)", VIDEO_BUFFER_COUNT);
   ESP_LOGI(TAG, "   Buffer size: %zu bytes", this->buffer_length_);
   ESP_LOGI(TAG, "   Buffers: %zu/%zu (mmap zero-copy)",
-           this->buffer_count_, VIDEO_BUFFER_COUNT);
+           this->buffer_count_, kVideoBufferCount);
   for (size_t i = 0; i < this->buffer_count_; i++) {
     ESP_LOGI(TAG, "     [%zu] addr=%p size=%zu", i,
              this->mmap_buffers_[i], this->buffer_lengths_[i]);
@@ -173,7 +173,7 @@ bool LVGLCameraDisplay::setup_buffers_() {
   } req;
   
   // Demander les buffers
-  for (size_t i = 0; i < VIDEO_BUFFER_COUNT; i++) {
+  for (size_t i = 0; i < kVideoBufferCount; i++) {
     this->mmap_buffers_[i] = nullptr;
     this->buffer_lengths_[i] = 0;
   }
@@ -183,6 +183,7 @@ bool LVGLCameraDisplay::setup_buffers_() {
   struct v4l2_requestbuffers req;
   memset(&req, 0, sizeof(req));
   req.count = VIDEO_BUFFER_COUNT;
+  req.count = kVideoBufferCount;
   req.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
   req.memory = V4L2_MEMORY_MMAP;
   
@@ -194,11 +195,6 @@ bool LVGLCameraDisplay::setup_buffers_() {
 
   if (ioctl(this->video_fd_, VIDIOC_REQBUFS, &req) != 0) {
     ESP_LOGE(TAG, "Failed to request buffers: %s", strerror(errno));
-    return false;
-  }
-
-  if (req.count == 0) {
-    ESP_LOGE(TAG, "Video device provided zero buffers");
     return false;
   }
 
@@ -229,12 +225,17 @@ bool LVGLCameraDisplay::setup_buffers_() {
 
   // Mapper chaque buffer
   for (int i = 0; i < VIDEO_BUFFER_COUNT; i++) {
-  if (req.count < VIDEO_BUFFER_COUNT) {
-    ESP_LOGW(TAG, "Video device only provided %u buffers (requested %zu)",
-             req.count, VIDEO_BUFFER_COUNT);
+  if (req.count == 0) {
+    ESP_LOGE(TAG, "Video device provided zero buffers");
+    return false;
   }
 
-  const size_t requested = std::min<size_t>(req.count, VIDEO_BUFFER_COUNT);
+  if (req.count < kVideoBufferCount) {
+    ESP_LOGW(TAG, "Video device only provided %u buffers (requested %zu)",
+             req.count, kVideoBufferCount);
+  }
+
+  const size_t requested = std::min<size_t>(req.count, kVideoBufferCount);
   size_t mapped = 0;
 
   for (size_t i = 0; i < requested; i++) {
@@ -476,7 +477,7 @@ void LVGLCameraDisplay::cleanup_() {
     this->buffer_lengths_[i] = 0;
   }
 
-  for (size_t i = this->buffer_count_; i < VIDEO_BUFFER_COUNT; i++) {
+  for (size_t i = this->buffer_count_; i < kVideoBufferCount; i++) {
     this->mmap_buffers_[i] = nullptr;
     this->buffer_lengths_[i] = 0;
   }
@@ -616,9 +617,14 @@ bool LVGLCameraDisplay::capture_frame_() {
       lv_canvas_set_buffer(this->canvas_obj_, frame_data, width, height, 
                            LV_IMG_CF_TRUE_COLOR);
     #endif
+#if defined(LV_VERSION_CHECK)
 #if LV_VERSION_CHECK(9, 0, 0)
     lv_canvas_set_buffer(this->canvas_obj_, frame_data, width, height,
                          LV_COLOR_FORMAT_RGB565);
+#else
+    lv_canvas_set_buffer(this->canvas_obj_, frame_data, width, height,
+                         LV_IMG_CF_TRUE_COLOR);
+#endif
 #else
     lv_canvas_set_buffer(this->canvas_obj_, frame_data, width, height,
                          LV_IMG_CF_TRUE_COLOR);
@@ -680,7 +686,7 @@ void LVGLCameraDisplay::dump_config() {
   ESP_LOGCONFIG(TAG, "  Resolution: %ux%u", this->width_, this->height_);
   ESP_LOGCONFIG(TAG, "  Buffers: %d (mmap zero-copy)", VIDEO_BUFFER_COUNT);
   ESP_LOGCONFIG(TAG, "  Buffers: %zu/%zu (mmap zero-copy)",
-                this->buffer_count_, VIDEO_BUFFER_COUNT);
+                this->buffer_count_, kVideoBufferCount);
   ESP_LOGCONFIG(TAG, "  PPA: %s", this->ppa_handle_ ? "ENABLED" : "DISABLED");
 #else
   ESP_LOGCONFIG(TAG, "  Mode: NOT SUPPORTED (ESP32-P4 required)");
