@@ -6,12 +6,12 @@
 
 #ifdef USE_ESP32_VARIANT_ESP32P4
 #include <fcntl.h>
-#include "ioctl.h"     // <- headers locaux dans le même dossier
-#include "mman.h"      // <- headers locaux dans le même dossier
+#include "ioctl.h"     // headers locaux dans le même dossier
+#include "mman.h"      // headers locaux dans le même dossier
 #include "../mipi_dsi_cam/videodev2.h"
 #include "../mipi_dsi_cam/esp_video_device.h"
 #include "../mipi_dsi_cam/mipi_dsi_cam.h"
-#include "../mipi_dsi_cam/esp_video_init.h"        // <- pour esp_video_init()/deinit()
+#include "../mipi_dsi_cam/esp_video_init.h"   // pour esp_video_init()/deinit()
 #include "driver/ppa.h"
 #include "esp_cache.h"
 #endif
@@ -107,6 +107,7 @@ class LVGLCameraDisplay : public Component {
 
 }  // namespace lvgl_camera_display
 }  // namespace esphome
+
 
 
 
