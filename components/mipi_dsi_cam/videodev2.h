@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: ((GPL-2.0+ WITH Linux-syscall-note) OR BSD-3-Clause) */
 /*
  *  Video for Linux Two header file - ESP32-P4 version
- *  Simplifié et autonome pour ESPHome - Tout en un seul fichier
+ *  Version complète compatible ESPHome & esp-video
  */
 
 #ifndef __LINUX_VIDEODEV2_H
@@ -35,54 +35,38 @@ typedef int64_t  __s64;
 #define _IOWR(type,nr,size)    _IOC(3,(type),(nr),sizeof(size))
 #endif
 
-#ifndef __inline__
-#define __inline__ inline
-#endif
-
-/* ========== CONSTANTES ========== */
+/* ========== CONSTANTES GÉNÉRALES ========== */
 #define VIDEO_MAX_FRAME  32
 #define VIDEO_MAX_PLANES 8
 
-/* Four-character-code (FOURCC) */
-#define v4l2_fourcc(a, b, c, d) ((__u32)(a) | ((__u32)(b) << 8) | ((__u32)(c) << 16) | ((__u32)(d) << 24))
-#define v4l2_fourcc_be(a, b, c, d) (v4l2_fourcc(a, b, c, d) | (1U << 31))
+#define v4l2_fourcc(a,b,c,d) ((__u32)(a) | ((__u32)(b)<<8) | ((__u32)(c)<<16) | ((__u32)(d)<<24))
+#define v4l2_fourcc_be(a,b,c,d) (v4l2_fourcc(a,b,c,d) | (1U<<31))
 
-/* ========== ENUMERATIONS ========== */
+/* ========== ENUMÉRATIONS ========== */
 enum v4l2_field {
     V4L2_FIELD_ANY = 0,
     V4L2_FIELD_NONE = 1,
     V4L2_FIELD_TOP = 2,
     V4L2_FIELD_BOTTOM = 3,
-    V4L2_FIELD_INTERLACED = 4,
-    V4L2_FIELD_SEQ_TB = 5,
-    V4L2_FIELD_SEQ_BT = 6,
-    V4L2_FIELD_ALTERNATE = 7,
-    V4L2_FIELD_INTERLACED_TB = 8,
-    V4L2_FIELD_INTERLACED_BT = 9,
+    V4L2_FIELD_INTERLACED = 4
 };
 
 enum v4l2_buf_type {
     V4L2_BUF_TYPE_VIDEO_CAPTURE = 1,
     V4L2_BUF_TYPE_VIDEO_OUTPUT = 2,
     V4L2_BUF_TYPE_VIDEO_OVERLAY = 3,
-    V4L2_BUF_TYPE_VIDEO_OUTPUT_OVERLAY = 8,
     V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE = 9,
-    V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE = 10,
-    V4L2_BUF_TYPE_SDR_CAPTURE = 11,
-    V4L2_BUF_TYPE_SDR_OUTPUT = 12,
-    V4L2_BUF_TYPE_META_CAPTURE = 13,
-    V4L2_BUF_TYPE_META_OUTPUT = 14,
-    V4L2_BUF_TYPE_PRIVATE = 0x80,
+    V4L2_BUF_TYPE_META_CAPTURE = 13
 };
 
 enum v4l2_memory {
     V4L2_MEMORY_MMAP = 1,
     V4L2_MEMORY_USERPTR = 2,
     V4L2_MEMORY_OVERLAY = 3,
-    V4L2_MEMORY_DMABUF = 4,
+    V4L2_MEMORY_DMABUF = 4
 };
 
-/* ========== STRUCTURES ========== */
+/* ========== STRUCTURES PRINCIPALES ========== */
 struct v4l2_capability {
     __u8 driver[16];
     __u8 card[32];
@@ -103,10 +87,7 @@ struct v4l2_pix_format {
     __u32 colorspace;
     __u32 priv;
     __u32 flags;
-    union {
-        __u32 ycbcr_enc;
-        __u32 hsv_enc;
-    };
+    __u32 ycbcr_enc;
     __u32 quantization;
     __u32 xfer_func;
 };
@@ -119,7 +100,7 @@ struct v4l2_format {
     } fmt;
 };
 
-/* ========== BUFFER MANAGEMENT STRUCTURES ========== */
+/* ========== BUFFER HANDLING ========== */
 struct v4l2_requestbuffers {
     __u32 count;
     __u32 type;
@@ -174,9 +155,78 @@ struct v4l2_buffer {
 #define V4L2_PIX_FMT_RGB565 v4l2_fourcc('R','G','B','P')
 #define V4L2_PIX_FMT_RGB24  v4l2_fourcc('R','G','B','3')
 #define V4L2_PIX_FMT_YUV422P v4l2_fourcc('4','2','2','P')
-#define V4L2_PIX_FMT_YUV420 v4l2_fourcc('Y','U','1','2')
-#define V4L2_PIX_FMT_SBGGR8 v4l2_fourcc('B','A','8','1')
+#define V4L2_PIX_FMT_YUV420  v4l2_fourcc('Y','U','1','2')
+#define V4L2_PIX_FMT_SBGGR8  v4l2_fourcc('B','A','8','1')
 #define V4L2_PIX_FMT_SBGGR10 v4l2_fourcc('B','G','1','0')
+
+/* ========== CONTROL TYPES ========== */
+#define V4L2_CTRL_TYPE_INTEGER      1
+#define V4L2_CTRL_TYPE_BOOLEAN      2
+#define V4L2_CTRL_TYPE_MENU         3
+#define V4L2_CTRL_TYPE_BUTTON       4
+#define V4L2_CTRL_TYPE_INTEGER64    5
+#define V4L2_CTRL_TYPE_CTRL_CLASS   6
+#define V4L2_CTRL_TYPE_STRING       7
+#define V4L2_CTRL_TYPE_BITMASK      8
+#define V4L2_CTRL_TYPE_INTEGER_MENU 9
+
+/* ========== CONTROL IDS ========== */
+#define V4L2_CID_BASE               0x00980900
+#define V4L2_CID_BRIGHTNESS         (V4L2_CID_BASE + 0)
+#define V4L2_CID_CONTRAST           (V4L2_CID_BASE + 1)
+#define V4L2_CID_SATURATION         (V4L2_CID_BASE + 2)
+#define V4L2_CID_HUE                (V4L2_CID_BASE + 3)
+#define V4L2_CID_EXPOSURE           (V4L2_CID_BASE + 17)
+#define V4L2_CID_GAIN               (V4L2_CID_BASE + 19)
+#define V4L2_CID_AUTO_EXPOSURE_BIAS (V4L2_CID_BASE + 26)
+#define V4L2_CID_RED_BALANCE        (V4L2_CID_BASE + 14)
+#define V4L2_CID_BLUE_BALANCE       (V4L2_CID_BASE + 15)
+
+/* ========== EXT CONTROL STRUCTURES ========== */
+struct v4l2_ext_control {
+    __u32 id;
+    __u32 size;
+    __u32 reserved2[1];
+    union {
+        __s32 value;
+        __s64 value64;
+        char *string;
+        __u8 *p_u8;
+        __u16 *p_u16;
+        __u32 *p_u32;
+        void *ptr;
+    };
+} __attribute__ ((packed));
+
+struct v4l2_ext_controls {
+    __u32 ctrl_class;
+    __u32 count;
+    __u32 error_idx;
+    __u32 reserved[2];
+    struct v4l2_ext_control *controls;
+};
+
+struct v4l2_query_ext_ctrl {
+    __u32 id;
+    __u32 type;
+    __u64 minimum;
+    __u64 maximum;
+    __u64 step;
+    __u64 default_value;
+    __u32 flags;
+    __u32 elem_size;
+    __u32 elems;
+    __u32 nr_of_dims;
+    __u32 dims[4];
+    __u32 reserved[32];
+    char name[32];
+};
+
+/* ========== COLORSPACES ========== */
+#define V4L2_COLORSPACE_SRGB 8
+#define V4L2_COLORSPACE_REC709 1
+#define V4L2_COLORSPACE_JPEG 7
+#define V4L2_COLORSPACE_RAW 10
 
 /* ========== IOCTL COMMANDS ========== */
 #define VIDIOC_QUERYCAP   _IOR('V',  0, struct v4l2_capability)
@@ -188,10 +238,14 @@ struct v4l2_buffer {
 #define VIDIOC_DQBUF      _IOWR('V',17, struct v4l2_buffer)
 #define VIDIOC_STREAMON   _IOW ('V',18, int)
 #define VIDIOC_STREAMOFF  _IOW ('V',19, int)
+#define VIDIOC_G_EXT_CTRLS _IOWR('V',71, struct v4l2_ext_controls)
+#define VIDIOC_S_EXT_CTRLS _IOWR('V',72, struct v4l2_ext_controls)
+#define VIDIOC_QUERY_EXT_CTRL _IOWR('V',103, struct v4l2_query_ext_ctrl)
 
 #ifdef __cplusplus
 }
 #endif
 
 #endif /* __LINUX_VIDEODEV2_H */
+
 
