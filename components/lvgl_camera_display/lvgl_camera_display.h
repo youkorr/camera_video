@@ -37,6 +37,12 @@ namespace lvgl_camera_display {
 // Configuration
 #define VIDEO_BUFFER_COUNT 3  // Triple buffering
 #define MEMORY_TYPE V4L2_MEMORY_MMAP
+
+enum Rotation {
+  ROTATION_0 = 0,
+  ROTATION_90 = 90,
+  ROTATION_180 = 180,
+  ROTATION_270 = 270
 static constexpr size_t kVideoBufferCount = 3;  // Triple buffering
 
 #ifdef USE_ESP32_VARIANT_ESP32P4
@@ -46,13 +52,16 @@ using ppa_client_handle_t = void *;
 constexpr const char *kDefaultVideoDevice = "/dev/video0";
 #endif
 
-enum Rotation {
-  ROTATION_0 = 0,
-  ROTATION_90 = 90,
-  ROTATION_180 = 180,
-  ROTATION_270 = 270
-  ROTATION_270 = 270,
+enum class Rotation : uint16_t {
+  DEG_0 = 0,
+  DEG_90 = 90,
+  DEG_180 = 180,
+  DEG_270 = 270,
 };
+
+constexpr uint16_t to_degrees(Rotation rotation) {
+  return static_cast<uint16_t>(rotation);
+}
 
 class LVGLCameraDisplay : public Component {
  public:
@@ -130,6 +139,7 @@ class LVGLCameraDisplay : public Component {
   uint16_t width_{1280};
   uint16_t height_{720};
   Rotation rotation_{ROTATION_0};
+  Rotation rotation_{Rotation::DEG_0};
   bool mirror_x_{false};
   bool mirror_y_{false};
   uint32_t update_interval_{33};  // ~30 FPS
