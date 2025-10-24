@@ -451,4 +451,19 @@ void LVGLCameraDisplay::configure_canvas(lv_obj_t *canvas) {
 }  // namespace lvgl_camera_display
 }  // namespace esphome
 
+#else  // !USE_ESP32_VARIANT_ESP32P4
+
+// Plateforme non supportée
+#include "esphome/core/log.h"
+namespace esphome { namespace lvgl_camera_display {
+static const char *const TAG = "lvgl_camera_display";
+void LVGLCameraDisplay::setup(){ ESP_LOGE(TAG, "❌ V4L2 pipeline requires ESP32-P4"); this->mark_failed(); }
+void LVGLCameraDisplay::loop() {}
+void LVGLCameraDisplay::dump_config(){ ESP_LOGCONFIG(TAG, "  Mode: NOT SUPPORTED (ESP32-P4 required)"); }
+void LVGLCameraDisplay::configure_canvas(lv_obj_t*) {}
+}}
+
+#endif
+
+
 
