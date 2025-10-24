@@ -10,6 +10,7 @@
 
 #ifdef USE_ESP32_VARIANT_ESP32P4
 #include <sys/time.h>
+#include "esp_heap_caps.h"
 #endif
 
 namespace esphome {
