@@ -1,31 +1,4 @@
-/*
- * SPDX-FileCopyrightText: 2024 Espressif Systems (Shanghai) CO LTD
- *
- * SPDX-License-Identifier: ESPRESSIF MIT
- */
-
-#pragma once
-
-#ifdef __cplusplus
-extern "C" {
-#endif
-
-#define _IOC_NRBITS         8
-#define _IOC_TYPEBITS       8
-
-#ifndef _IOC_SIZEBITS
-#define _IOC_SIZEBITS       14
-#endif
-
-#ifndef _IOC_DIRBITS
-#define _IOC_DIRBITS        2
-#endif
-
-#ifndef _IOC_NONE
-#define _IOC_NONE           0U
-#endif
-
-#ifndef _IOC_WRITE
+@@ -29,33 +29,44 @@ extern "C" {
 #define _IOC_WRITE          1U
 #endif
 
@@ -51,11 +24,22 @@ extern "C" {
 
 #define _IOC_TYPECHECK(t) (sizeof(t))
 
+#ifndef _IO
 #define _IO(type,nr)        _IOC(_IOC_NONE,(type),(nr),0)
+#endif
+
+#ifndef _IOR
 #define _IOR(type,nr,size)  _IOC(_IOC_READ,(type),(nr),(_IOC_TYPECHECK(size)))
+#endif
+
+#ifndef _IOW
 #define _IOW(type,nr,size)  _IOC(_IOC_WRITE,(type),(nr),(_IOC_TYPECHECK(size)))
+#endif
+
+#ifndef _IOWR
 #define _IOWR(type,nr,size) _IOC(_IOC_READ|_IOC_WRITE,(type),(nr),(_IOC_TYPECHECK(size)))
+#endif
 
 #ifdef __cplusplus
 }
-#endif
+#endi
