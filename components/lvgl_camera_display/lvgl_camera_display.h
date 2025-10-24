@@ -5,29 +5,22 @@
 #include "esphome/components/lvgl/lvgl_esphome.h"
 
 #ifdef USE_ESP32_VARIANT_ESP32P4
-  #include <fcntl.h>
-  #include <unistd.h>
-  #include <errno.h>
-  #include <string.h>
-
-  // IMPORTANT: utilise les headers LOCAUX pour l’émulation POSIX
-  #include "ioctl.h"
-  #include "mman.h"
-
-  // V4L2 “maison” + device name esp-video
-  #include "../mipi_dsi_cam/videodev2.h"
-  #include "../mipi_dsi_cam/esp_video_device.h"
-  #include "../mipi_dsi_cam/mipi_dsi_cam.h"
-
-  #include "driver/ppa.h"
-  #include "esp_cache.h"
+#include <fcntl.h>
+#include "ioctl.h"     // <- headers locaux dans le même dossier
+#include "mman.h"      // <- headers locaux dans le même dossier
+#include "../mipi_dsi_cam/videodev2.h"
+#include "../mipi_dsi_cam/esp_video_device.h"
+#include "../mipi_dsi_cam/mipi_dsi_cam.h"
+#include "esp_video_init.h"        // <- pour esp_video_init()/deinit()
+#include "driver/ppa.h"
+#include "esp_cache.h"
 #endif
 
 namespace esphome {
 namespace lvgl_camera_display {
 
 // Configuration
-#define VIDEO_BUFFER_COUNT 3  // Triple buffering (conservé)
+#define VIDEO_BUFFER_COUNT 3  // Triple buffering
 #define MEMORY_TYPE V4L2_MEMORY_MMAP
 
 enum Rotation {
@@ -42,9 +35,7 @@ class LVGLCameraDisplay : public Component {
   void setup() override;
   void loop() override;
   void dump_config() override;
-
-  // IMPORTANT: passer APRÈS la caméra/adaptateur V4L2 (évite ENOENT)
-  float get_setup_priority() const override { return setup_priority::LATE; }
+  float get_setup_priority() const override { return setup_priority::HARDWARE; }
 
   // Configuration
   void set_camera(mipi_dsi_cam::MipiDsiCam *camera) { this->camera_ = camera; }
@@ -66,7 +57,7 @@ class LVGLCameraDisplay : public Component {
   mipi_dsi_cam::MipiDsiCam *camera_{nullptr};
   
 #ifdef USE_ESP32_VARIANT_ESP32P4
-  // V4L2 device (ton layer expose /dev/video0 etc.)
+  // V4L2 device
   int video_fd_{-1};
   const char *video_device_{ESP_VIDEO_MIPI_CSI_DEVICE_NAME};  // "/dev/video0"
   
@@ -116,5 +107,6 @@ class LVGLCameraDisplay : public Component {
 
 }  // namespace lvgl_camera_display
 }  // namespace esphome
+
 
 
