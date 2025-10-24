@@ -1,3 +1,32 @@
+#pragma once
+
+#include "esphome/core/component.h"
+#include "esphome/core/hal.h"
+#include "esphome/components/lvgl/lvgl_esphome.h"
+
+#ifdef USE_ESP32_VARIANT_ESP32P4
+#include <fcntl.h>
+#include <sys/ioctl.h>
+#include "mman.h"
+#include "../mipi_dsi_cam/videodev2.h"
+#include "../mipi_dsi_cam/esp_video_device.h"
+#include "../mipi_dsi_cam/mipi_dsi_cam.h"
+#include "../mipi_dsi_cam/videodev2.h"
+
+#include "driver/ppa.h"
+#include "esp_cache.h"
+
+#include <fcntl.h>
+#include <unistd.h>
+
+#include "ioctl.h"
+#include "mman.h"
+#else
+namespace mipi_dsi_cam {
+class MipiDsiCam;
+}
+#endif
+
 #include <cstddef>
 #include <cstdint>
 
@@ -7,7 +36,14 @@ namespace lvgl_camera_display {
 // Configuration
 #define VIDEO_BUFFER_COUNT 3  // Triple buffering
 #define MEMORY_TYPE V4L2_MEMORY_MMAP
-static constexpr size_t VIDEO_BUFFER_COUNT = 3;  // Triple buffering
+static constexpr size_t kVideoBufferCount = 3;  // Triple buffering
+
+#ifdef USE_ESP32_VARIANT_ESP32P4
+constexpr const char *kDefaultVideoDevice = ESP_VIDEO_MIPI_CSI_DEVICE_NAME;
+#else
+using ppa_client_handle_t = void *;
+constexpr const char *kDefaultVideoDevice = "/dev/video0";
+#endif
 
 enum Rotation {
   ROTATION_0 = 0,
@@ -45,18 +81,21 @@ class LVGLCameraDisplay : public Component {
  protected:
   mipi_dsi_cam::MipiDsiCam *camera_{nullptr};
   
-
 #ifdef USE_ESP32_VARIANT_ESP32P4
   // V4L2 device
+
+  // V4L2 device (ESP32-P4 only)
   int video_fd_{-1};
   const char *video_device_{ESP_VIDEO_MIPI_CSI_DEVICE_NAME};  // "/dev/video0"
   
+  const char *video_device_{kDefaultVideoDevice};
 
   // Buffers mmappés (zero-copy)
   uint8_t *mmap_buffers_[VIDEO_BUFFER_COUNT]{nullptr};
   size_t buffer_length_{0};
   
-  size_t buffer_lengths_[VIDEO_BUFFER_COUNT]{0};
+  uint8_t *mmap_buffers_[kVideoBufferCount]{nullptr};
+  size_t buffer_lengths_[kVideoBufferCount]{0};
   size_t buffer_count_{0};
 
   // PPA pour transformations
@@ -65,6 +104,7 @@ class LVGLCameraDisplay : public Component {
   size_t transform_buffer_size_{0};
   
 
+#ifdef USE_ESP32_VARIANT_ESP32P4
   // Méthodes V4L2
   bool open_video_device_();
   bool setup_buffers_();
