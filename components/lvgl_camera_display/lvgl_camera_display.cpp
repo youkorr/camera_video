@@ -5,8 +5,8 @@
 #ifdef USE_ESP32_VARIANT_ESP32P4
 
 #include <fcntl.h>
-#include <sys/ioctl.h>
-#include <sys/mman.h>
+#include "ioctl.h"
+#include "mman.h"
 #include <unistd.h>
 #include <errno.h>
 #include <string.h>
