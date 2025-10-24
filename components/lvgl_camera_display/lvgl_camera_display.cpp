@@ -28,6 +28,7 @@ static const char *const TAG = "lvgl_camera_display";
 
 void LVGLCameraDisplay::setup() {
   ESP_LOGCONFIG(TAG, "🎥 LVGL Camera Display (V4L2 Pipeline)");
+  ESP_LOGCONFIG(TAG, "LVGL Camera Display (V4L2 Pipeline)");
 
 #ifdef USE_ESP32_VARIANT_ESP32P4
   // Récupérer la résolution depuis la caméra
@@ -43,15 +44,17 @@ void LVGLCameraDisplay::setup() {
     this->width_ = this->camera_->get_image_width();
     this->height_ = this->camera_->get_image_height();
     ESP_LOGI(TAG, "📐 Using camera resolution: %ux%u", this->width_, this->height_);
+    ESP_LOGI(TAG, "Using camera resolution: %ux%u", this->width_, this->height_);
   } else {
     ESP_LOGW(TAG, "⚠️  No camera linked, using default resolution %ux%u", 
-    ESP_LOGW(TAG, "⚠️  No camera linked, using default resolution %ux%u",
+    ESP_LOGW(TAG, "No camera linked, using default resolution %ux%u",
              this->width_, this->height_);
   }
 
   // Ouvrir le device vidéo
   if (!this->open_video_device_()) {
     ESP_LOGE(TAG, "❌ Failed to open video device");
+    ESP_LOGE(TAG, "Failed to open video device");
     this->mark_failed();
     return;
   }
@@ -59,6 +62,7 @@ void LVGLCameraDisplay::setup() {
   // Setup des buffers mmap
   if (!this->setup_buffers_()) {
     ESP_LOGE(TAG, "❌ Failed to setup buffers");
+    ESP_LOGE(TAG, "Failed to setup buffers");
     this->cleanup_();
     this->mark_failed();
     return;
@@ -69,6 +73,7 @@ void LVGLCameraDisplay::setup() {
   if (this->rotation_ != Rotation::DEG_0 || this->mirror_x_ || this->mirror_y_) {
     if (!this->init_ppa_()) {
       ESP_LOGE(TAG, "❌ Failed to initialize PPA");
+      ESP_LOGE(TAG, "Failed to initialize PPA");
       this->cleanup_();
       this->mark_failed();
       return;
@@ -76,7 +81,7 @@ void LVGLCameraDisplay::setup() {
     ESP_LOGI(TAG, "✅ PPA initialized (rotation=%d°, mirror_x=%s, mirror_y=%s)",
              this->rotation_, this->mirror_x_ ? "ON" : "OFF", 
 
-    ESP_LOGI(TAG, "✅ PPA initialized (rotation=%u°, mirror_x=%s, mirror_y=%s)",
+    ESP_LOGI(TAG, "PPA initialized (rotation=%u deg, mirror_x=%s, mirror_y=%s)",
              to_degrees(this->rotation_), this->mirror_x_ ? "ON" : "OFF",
              this->mirror_y_ ? "ON" : "OFF");
   }
@@ -84,12 +89,14 @@ void LVGLCameraDisplay::setup() {
   // Démarrer le streaming
   if (!this->start_streaming_()) {
     ESP_LOGE(TAG, "❌ Failed to start streaming");
+    ESP_LOGE(TAG, "Failed to start streaming");
     this->cleanup_();
     this->mark_failed();
     return;
   }
 
   ESP_LOGI(TAG, "✅ V4L2 pipeline ready");
+  ESP_LOGI(TAG, "V4L2 pipeline ready");
   ESP_LOGI(TAG, "   Device: %s", this->video_device_);
   ESP_LOGI(TAG, "   Resolution: %ux%u", this->width_, this->height_);
   ESP_LOGI(TAG, "   Buffers: %d (mmap zero-copy)", VIDEO_BUFFER_COUNT);
@@ -103,6 +110,7 @@ void LVGLCameraDisplay::setup() {
   ESP_LOGI(TAG, "   Target FPS: %.1f", 1000.0f / this->update_interval_);
 #else
   ESP_LOGE(TAG, "❌ V4L2 pipeline requires ESP32-P4");
+  ESP_LOGE(TAG, "V4L2 pipeline requires ESP32-P4");
   this->mark_failed();
 #endif
 }
@@ -341,6 +349,7 @@ bool LVGLCameraDisplay::start_streaming_() {
   this->streaming_ = true;
   ESP_LOGI(TAG, "✅ Streaming started");
   
+  ESP_LOGI(TAG, "Streaming started");
   return true;
 }
 
@@ -551,6 +560,7 @@ void LVGLCameraDisplay::loop() {
         float elapsed = (now - this->last_fps_time_) / 1000.0f;
         float fps = 100.0f / elapsed;
         ESP_LOGI(TAG, "🎞️  Display FPS: %.2f | Frames: %u", fps, this->frame_count_);
+        ESP_LOGI(TAG, "Display FPS: %.2f | Frames: %u", fps, this->frame_count_);
       }
       this->last_fps_time_ = now;
     }
@@ -618,6 +628,7 @@ bool LVGLCameraDisplay::capture_frame_() {
   if (this->first_update_) {
     ESP_LOGI(TAG, "🖼️  First frame:");
     ESP_LOGI(TAG, "   Buffer index: %d", buf.index);
+    ESP_LOGI(TAG, "First frame:");
     ESP_LOGI(TAG, "   Buffer index: %u", buf.index);
     ESP_LOGI(TAG, "   Buffer address: %p", frame_data);
     ESP_LOGI(TAG, "   Bytes used: %u", buf.bytesused);
@@ -722,7 +733,7 @@ void LVGLCameraDisplay::dump_config() {
 #endif
   ESP_LOGCONFIG(TAG, "  Canvas: %s", this->canvas_obj_ ? "YES" : "NO");
   ESP_LOGCONFIG(TAG, "  Rotation: %d°", this->rotation_);
-  ESP_LOGCONFIG(TAG, "  Rotation: %u°", to_degrees(this->rotation_));
+  ESP_LOGCONFIG(TAG, "  Rotation: %u deg", to_degrees(this->rotation_));
   ESP_LOGCONFIG(TAG, "  Mirror X: %s", this->mirror_x_ ? "YES" : "NO");
   ESP_LOGCONFIG(TAG, "  Mirror Y: %s", this->mirror_y_ ? "YES" : "NO");
   ESP_LOGCONFIG(TAG, "  Update interval: %u ms", this->update_interval_);
@@ -742,6 +753,7 @@ void LVGLCameraDisplay::dump_config() {
 void LVGLCameraDisplay::configure_canvas(lv_obj_t *canvas) {
   this->canvas_obj_ = canvas;
   ESP_LOGI(TAG, "🎨 Canvas configured: %p", canvas);
+  ESP_LOGI(TAG, "Canvas configured: %p", canvas);
 
   if (canvas != nullptr) {
     lv_coord_t w = lv_obj_get_width(canvas);
