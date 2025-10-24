@@ -50,6 +50,12 @@ enum class Rotation : uint16_t {
   DEG_270 = 270,
 };
 
+// Backwards compatible aliases for the previous enumerator-style constants.
+constexpr Rotation ROTATION_0 = Rotation::DEG_0;
+constexpr Rotation ROTATION_90 = Rotation::DEG_90;
+constexpr Rotation ROTATION_180 = Rotation::DEG_180;
+constexpr Rotation ROTATION_270 = Rotation::DEG_270;
+
 constexpr uint16_t to_degrees(Rotation rotation) {
   return static_cast<uint16_t>(rotation);
 }
@@ -89,14 +95,14 @@ class LVGLCameraDisplay : public Component {
   int video_fd_{-1};
   const char *video_device_{ESP_VIDEO_MIPI_CSI_DEVICE_NAME};  // "/dev/video0"
   
-  const char *video_device_{kDefaultVideoDevice};
+  const char *video_device_ = kDefaultVideoDevice;
 
   // Buffers mmappés (zero-copy)
   uint8_t *mmap_buffers_[VIDEO_BUFFER_COUNT]{nullptr};
   size_t buffer_length_{0};
   
-  uint8_t *mmap_buffers_[kVideoBufferCount]{nullptr};
-  size_t buffer_lengths_[kVideoBufferCount]{0};
+  uint8_t *mmap_buffers_[kVideoBufferCount] = {nullptr};
+  size_t buffer_lengths_[kVideoBufferCount] = {0};
   size_t buffer_count_{0};
 
   // PPA pour transformations
@@ -130,7 +136,7 @@ class LVGLCameraDisplay : public Component {
   uint16_t width_{1280};
   uint16_t height_{720};
   Rotation rotation_{ROTATION_0};
-  Rotation rotation_{Rotation::DEG_0};
+  Rotation rotation_ = Rotation::DEG_0;
   bool mirror_x_{false};
   bool mirror_y_{false};
   uint32_t update_interval_{33};  // ~30 FPS
