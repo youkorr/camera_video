@@ -8,8 +8,16 @@
 #include <cerrno>
 #include <cstring>
 
+#include "../mipi_dsi_cam/mipi_dsi_cam.h"
+
 #ifdef USE_ESP32_VARIANT_ESP32P4
-#include <sys/time.h>
+#include "../mipi_dsi_cam/videodev2.h"
+#include "ioctl.h"
+#include "mman.h"
+
+#include <fcntl.h>
+#include <unistd.h>
+
 #include "esp_heap_caps.h"
 #endif
 
@@ -201,6 +209,11 @@ bool LVGLCameraDisplay::setup_buffers_() {
     return false;
   }
 
+  if (req.count == 0) {
+    ESP_LOGE(TAG, "Video device provided zero buffers");
+    return false;
+  }
+
   ESP_LOGI(TAG, "Requested %d buffers, got %d", VIDEO_BUFFER_COUNT, req.count);
 
   // Structure buffer simplifiée
@@ -228,11 +241,6 @@ bool LVGLCameraDisplay::setup_buffers_() {
 
   // Mapper chaque buffer
   for (int i = 0; i < VIDEO_BUFFER_COUNT; i++) {
-  if (req.count == 0) {
-    ESP_LOGE(TAG, "Video device provided zero buffers");
-    return false;
-  }
-
   if (req.count < kVideoBufferCount) {
     ESP_LOGW(TAG, "Video device only provided %u buffers (requested %zu)",
              req.count, kVideoBufferCount);
