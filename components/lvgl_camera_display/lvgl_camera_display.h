@@ -1,28 +1,3 @@
-#pragma once
-
-#include "esphome/core/component.h"
-#include "esphome/core/hal.h"
-#include "esphome/components/lvgl/lvgl_esphome.h"
-
-#ifdef USE_ESP32_VARIANT_ESP32P4
-#include <fcntl.h>
-#include <sys/ioctl.h>
-//#include "ioctl.h"
-#include "mman.h"
-#include "../mipi_dsi_cam/videodev2.h"
-#include "../mipi_dsi_cam/esp_video_device.h"
-#include "../mipi_dsi_cam/mipi_dsi_cam.h"
-#include "../mipi_dsi_cam/videodev2.h"
-
-#include "driver/ppa.h"
-#include "esp_cache.h"
-
-#include <fcntl.h>
-#include <sys/ioctl.h>
-#include <sys/mman.h>
-#include <unistd.h>
-#endif
-
 #include <cstddef>
 #include <cstdint>
 
@@ -134,3 +109,4 @@ class LVGLCameraDisplay : public Component {
 
 }  // namespace lvgl_camera_display
 }  // namespace esphome
+
