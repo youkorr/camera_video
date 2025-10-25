@@ -12,8 +12,8 @@
 #include "esp_memory_utils.h"
 #include "esp_heap_caps.h"
 #include "esp_video.h"
-#include "esp_video_vfs.h"
-#include "esp_cam_sensor.h"
+//#include "esp_video_vfs.h"
+//#include "esp_cam_sensor.h"
 
 #include "freertos/portmacro.h"
 
