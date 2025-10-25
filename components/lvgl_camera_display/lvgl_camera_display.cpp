@@ -2,6 +2,10 @@
 #include "esphome/core/log.h"
 #include "esphome/core/application.h"
 
+#include <algorithm>
+#include <cstring>
+#include <cerrno>
+
 namespace esphome {
 namespace lvgl_camera_display {
 
@@ -18,20 +22,39 @@ void LVGLCameraDisplay::setup() {
     ESP_LOGI(TAG, "📐 Using camera resolution: %ux%u", this->width_, this->height_);
   } else {
     ESP_LOGW(TAG, "⚠️  No camera linked, using default resolution %ux%u", 
+    ESP_LOGW(TAG, "⚠️  No camera linked, using default resolution %ux%u",
              this->width_, this->height_);
+  }
+
+  uint16_t display_width = this->width_;
+  uint16_t display_height = this->height_;
+  if (this->rotation_ == ROTATION_90 || this->rotation_ == ROTATION_270) {
+    std::swap(display_width, display_height);
+  }
+
+  if (!this->allocate_display_buffer_(display_width, display_height)) {
+    ESP_LOGE(TAG, "❌ Failed to allocate LVGL display buffer");
+    this->status_set_error("failed to allocate LVGL display buffer");
+    this->mark_failed();
+    this->cleanup_();
+    return;
   }
 
   // Ouvrir le device vidéo
   if (!this->open_video_device_()) {
     ESP_LOGE(TAG, "❌ Failed to open video device");
+    this->status_set_error("failed to open video device");
     this->mark_failed();
+    this->cleanup_();
     return;
   }
 
   // Setup des buffers mmap
   if (!this->setup_buffers_()) {
     ESP_LOGE(TAG, "❌ Failed to setup buffers");
+    this->status_set_error("failed to setup video buffers");
     this->mark_failed();
+    this->cleanup_();
     return;
   }
 
@@ -39,7 +62,9 @@ void LVGLCameraDisplay::setup() {
   if (this->rotation_ != ROTATION_0 || this->mirror_x_ || this->mirror_y_) {
     if (!this->init_ppa_()) {
       ESP_LOGE(TAG, "❌ Failed to initialize PPA");
+      this->status_set_error("failed to initialize PPA");
       this->mark_failed();
+      this->cleanup_();
       return;
     }
     ESP_LOGI(TAG, "✅ PPA initialized (rotation=%d°, mirror_x=%s, mirror_y=%s)",
@@ -50,7 +75,9 @@ void LVGLCameraDisplay::setup() {
   // Démarrer le streaming
   if (!this->start_streaming_()) {
     ESP_LOGE(TAG, "❌ Failed to start streaming");
+    this->status_set_error("failed to start video streaming");
     this->mark_failed();
+    this->cleanup_();
     return;
   }
 
@@ -62,6 +89,7 @@ void LVGLCameraDisplay::setup() {
   ESP_LOGI(TAG, "   Target FPS: %.1f", 1000.0f / this->update_interval_);
 #else
   ESP_LOGE(TAG, "❌ V4L2 pipeline requires ESP32-P4");
+  this->status_set_error("unsupported platform – ESP32-P4 required");
   this->mark_failed();
 #endif
 }
@@ -73,6 +101,7 @@ bool LVGLCameraDisplay::open_video_device_() {
 
   // Ouvrir /dev/video0
   this->video_fd_ = open(this->video_device_, O_RDONLY);
+  this->video_fd_ = open(this->video_device_, O_RDWR | O_NONBLOCK);
   if (this->video_fd_ < 0) {
     ESP_LOGE(TAG, "Failed to open %s: %d", this->video_device_, errno);
     return false;
@@ -98,247 +127,7 @@ bool LVGLCameraDisplay::open_video_device_() {
   if (ioctl(this->video_fd_, VIDIOC_G_FMT, &fmt) != 0) {
     ESP_LOGE(TAG, "Failed to get format");
     close(this->video_fd_);
-    return false;
-  }
-
-  // Vérifier/ajuster le format
-  if (fmt.fmt.pix.width != this->width_ || 
-      fmt.fmt.pix.height != this->height_ ||
-      fmt.fmt.pix.pixelformat != V4L2_PIX_FMT_RGB565) {
-    
-    fmt.fmt.pix.width = this->width_;
-    fmt.fmt.pix.height = this->height_;
-    fmt.fmt.pix.pixelformat = V4L2_PIX_FMT_RGB565;
-    
-    if (ioctl(this->video_fd_, VIDIOC_S_FMT, &fmt) != 0) {
-      ESP_LOGE(TAG, "Failed to set format");
-      close(this->video_fd_);
-      return false;
-    }
-  }
-
-  ESP_LOGI(TAG, "Format: %ux%u RGB565", fmt.fmt.pix.width, fmt.fmt.pix.height);
-  
-  return true;
-}
-
-bool LVGLCameraDisplay::setup_buffers_() {
-  // Structures V4L2 simplifiées (compatibles avec videodev2.h fourni)
-  struct {
-    __u32 count;
-    __u32 type;
-    __u32 memory;
-    __u32 reserved[2];
-  } req;
-  
-  // Demander les buffers
-  memset(&req, 0, sizeof(req));
-  req.count = VIDEO_BUFFER_COUNT;
-  req.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-  req.memory = V4L2_MEMORY_MMAP;
-  
-  // VIDIOC_REQBUFS = _IOWR('V', 8, struct v4l2_requestbuffers)
-  #define VIDIOC_REQBUFS_LOCAL _IOWR('V', 8, decltype(req))
-  
-  if (ioctl(this->video_fd_, VIDIOC_REQBUFS_LOCAL, &req) != 0) {
-    ESP_LOGE(TAG, "Failed to request buffers: %d", errno);
-    return false;
-  }
-
-  ESP_LOGI(TAG, "Requested %d buffers, got %d", VIDEO_BUFFER_COUNT, req.count);
-
-  // Structure buffer simplifiée
-  struct {
-    __u32 index;
-    __u32 type;
-    __u32 bytesused;
-    __u32 flags;
-    __u32 field;
-    struct timeval timestamp;
-    struct {
-      __u32 offset;
-      __u32 length;
-    } m;
-    __u32 length;
-    __u32 reserved2;
-    __u32 reserved;
-    __u32 memory;
-  } buf;
-  
-  // VIDIOC_QUERYBUF = _IOWR('V', 9, struct v4l2_buffer)
-  #define VIDIOC_QUERYBUF_LOCAL _IOWR('V', 9, decltype(buf))
-  // VIDIOC_QBUF = _IOWR('V', 15, struct v4l2_buffer)
-  #define VIDIOC_QBUF_LOCAL _IOWR('V', 15, decltype(buf))
-
-  // Mapper chaque buffer
-  for (int i = 0; i < VIDEO_BUFFER_COUNT; i++) {
-    memset(&buf, 0, sizeof(buf));
-    buf.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-    buf.memory = V4L2_MEMORY_MMAP;
-    buf.index = i;
-    
-    // Query buffer info
-    if (ioctl(this->video_fd_, VIDIOC_QUERYBUF_LOCAL, &buf) != 0) {
-      ESP_LOGE(TAG, "Failed to query buffer %d: %d", i, errno);
-      return false;
-    }
-
-    // mmap le buffer (ZERO-COPY!)
-    this->mmap_buffers_[i] = (uint8_t*)mmap(
-      NULL,
-      buf.length,
-      PROT_READ | PROT_WRITE,
-      MAP_SHARED,
-      this->video_fd_,
-      buf.m.offset
-    );
-
-    if (this->mmap_buffers_[i] == MAP_FAILED) {
-      ESP_LOGE(TAG, "Failed to mmap buffer %d: %d", i, errno);
-      return false;
-    }
-
-    this->buffer_length_ = buf.length;
-    
-    ESP_LOGI(TAG, "Buffer %d mapped at %p (size=%zu)", 
-             i, this->mmap_buffers_[i], this->buffer_length_);
-
-    // Queue le buffer
-    if (ioctl(this->video_fd_, VIDIOC_QBUF_LOCAL, &buf) != 0) {
-      ESP_LOGE(TAG, "Failed to queue buffer %d: %d", i, errno);
-      return false;
-    }
-  }
-
-  return true;
-}
-
-bool LVGLCameraDisplay::start_streaming_() {
-  int type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-  
-  if (ioctl(this->video_fd_, VIDIOC_STREAMON, &type) != 0) {
-    ESP_LOGE(TAG, "Failed to start streaming: %d", errno);
-    return false;
-  }
-
-  this->streaming_ = true;
-  ESP_LOGI(TAG, "✅ Streaming started");
-  
-  return true;
-}
-
-bool LVGLCameraDisplay::init_ppa_() {
-  ppa_client_config_t ppa_config = {
-    .oper_type = PPA_OPERATION_SRM,
-    .max_pending_trans_num = 1,
-  };
-  
-  esp_err_t ret = ppa_register_client(&ppa_config, &this->ppa_handle_);
-  if (ret != ESP_OK) {
-    ESP_LOGE(TAG, "PPA register failed: 0x%x", ret);
-    return false;
-  }
-
-  uint16_t width = this->width_;
-  uint16_t height = this->height_;
-  
-  // Ajuster dimensions selon rotation
-  if (this->rotation_ == ROTATION_90 || this->rotation_ == ROTATION_270) {
-    std::swap(width, height);
-  }
-
-  this->transform_buffer_size_ = width * height * 2;  // RGB565
-  this->transform_buffer_ = (uint8_t*)heap_caps_aligned_alloc(
-    64,
-    this->transform_buffer_size_,
-    MALLOC_CAP_SPIRAM
-  );
-
-  if (!this->transform_buffer_) {
-    ESP_LOGE(TAG, "Failed to allocate transform buffer");
-    ppa_unregister_client(this->ppa_handle_);
-    this->ppa_handle_ = nullptr;
-    return false;
-  }
-
-  ESP_LOGI(TAG, "PPA transform buffer: %ux%u (%zu bytes)", 
-           width, height, this->transform_buffer_size_);
-  
-  return true;
-}
-
-void LVGLCameraDisplay::deinit_ppa_() {
-  if (this->transform_buffer_) {
-    heap_caps_free(this->transform_buffer_);
-    this->transform_buffer_ = nullptr;
-  }
-  
-  if (this->ppa_handle_) {
-    ppa_unregister_client(this->ppa_handle_);
-    this->ppa_handle_ = nullptr;
-  }
-}
-
-bool LVGLCameraDisplay::transform_frame_(const uint8_t *src, uint8_t *dst) {
-  if (!this->ppa_handle_ || !src || !dst) {
-    return false;
-  }
-
-  uint16_t src_width = this->width_;
-  uint16_t src_height = this->height_;
-  uint16_t dst_width = src_width;
-  uint16_t dst_height = src_height;
-
-  if (this->rotation_ == ROTATION_90 || this->rotation_ == ROTATION_270) {
-    std::swap(dst_width, dst_height);
-  }
-
-  // Convertir rotation
-  ppa_srm_rotation_angle_t ppa_rotation;
-  switch (this->rotation_) {
-    case ROTATION_0:   ppa_rotation = PPA_SRM_ROTATION_ANGLE_0; break;
-    case ROTATION_90:  ppa_rotation = PPA_SRM_ROTATION_ANGLE_90; break;
-    case ROTATION_180: ppa_rotation = PPA_SRM_ROTATION_ANGLE_180; break;
-    case ROTATION_270: ppa_rotation = PPA_SRM_ROTATION_ANGLE_270; break;
-    default:           ppa_rotation = PPA_SRM_ROTATION_ANGLE_0; break;
-  }
-
-  // Configuration PPA
-  ppa_srm_oper_config_t srm_config = {
-    .in = {
-      .buffer = const_cast<uint8_t*>(src),
-      .pic_w = src_width,
-      .pic_h = src_height,
-      .block_w = src_width,
-      .block_h = src_height,
-      .block_offset_x = 0,
-      .block_offset_y = 0,
-      .srm_cm = PPA_SRM_COLOR_MODE_RGB565
-    },
-    .out = {
-      .buffer = dst,
-      .buffer_size = this->transform_buffer_size_,
-      .pic_w = dst_width,
-      .pic_h = dst_height,
-      .block_offset_x = 0,
-      .block_offset_y = 0,
-      .srm_cm = PPA_SRM_COLOR_MODE_RGB565
-    },
-    .rotation_angle = ppa_rotation,
-    .scale_x = 1.0f,
-    .scale_y = 1.0f,
-    .mirror_x = this->mirror_x_,
-    .mirror_y = this->mirror_y_,
-    .rgb_swap = false,
-    .byte_swap = false,
-    .mode = PPA_TRANS_MODE_BLOCKING
-  };
-
-  esp_err_t ret = ppa_do_scale_rotate_mirror(this->ppa_handle_, &srm_config);
-  if (ret != ESP_OK) {
-    ESP_LOGE(TAG, "PPA transformation failed: 0x%x", ret);
-    return false;
-  }
+@@ -342,50 +369,51 @@ bool LVGLCameraDisplay::transform_frame_(const uint8_t *src, uint8_t *dst) {
 
   return true;
 }
@@ -364,6 +153,7 @@ void LVGLCameraDisplay::cleanup_() {
   }
 
   this->deinit_ppa_();
+  this->free_display_buffer_();
 }
 #endif
 
@@ -389,21 +179,7 @@ void LVGLCameraDisplay::loop() {
     if (this->frame_count_ % 100 == 0 && this->frame_count_ > 0) {
       if (this->last_fps_time_ > 0) {
         float elapsed = (now - this->last_fps_time_) / 1000.0f;
-        float fps = 100.0f / elapsed;
-        ESP_LOGI(TAG, "🎞️  Display FPS: %.2f | Frames: %u", fps, this->frame_count_);
-      }
-      this->last_fps_time_ = now;
-    }
-  }
-#endif
-}
-
-#ifdef USE_ESP32_VARIANT_ESP32P4
-bool LVGLCameraDisplay::capture_frame_() {
-  // Structure buffer simplifiée
-  struct {
-    __u32 index;
-    __u32 type;
+@@ -407,128 +435,222 @@ bool LVGLCameraDisplay::capture_frame_() {
     __u32 bytesused;
     __u32 flags;
     __u32 field;
@@ -429,6 +205,9 @@ bool LVGLCameraDisplay::capture_frame_() {
   buf.memory = V4L2_MEMORY_MMAP;
 
   if (ioctl(this->video_fd_, VIDIOC_DQBUF_LOCAL, &buf) != 0) {
+    if (errno == EAGAIN) {
+      return false;
+    }
     ESP_LOGE(TAG, "Failed to dequeue buffer: %d", errno);
     return false;
   }
@@ -451,6 +230,7 @@ bool LVGLCameraDisplay::capture_frame_() {
     if (this->transform_frame_(frame_data, this->transform_buffer_)) {
       frame_data = this->transform_buffer_;
       
+
       if (this->rotation_ == ROTATION_90 || this->rotation_ == ROTATION_270) {
         std::swap(width, height);
       }
@@ -466,9 +246,32 @@ bool LVGLCameraDisplay::capture_frame_() {
       lv_canvas_set_buffer(this->canvas_obj_, frame_data, width, height, 
                            LV_IMG_CF_TRUE_COLOR);
     #endif
+  // S'assurer que le cache CPU voit les nouvelles données de la caméra
+  size_t sync_length = frame_data == this->transform_buffer_ ? this->transform_buffer_size_ : this->buffer_length_;
+  size_t frame_bytes = buf.bytesused > 0 ? buf.bytesused : static_cast<size_t>(width) * height * 2;
+  if (sync_length > 0 && frame_bytes > 0) {
+    frame_bytes = std::min(frame_bytes, sync_length);
+    esp_cache_msync(frame_data, frame_bytes, ESP_CACHE_MSYNC_FLAG_INVALIDATE);
+  }
+
+  if (!this->canvas_buffer_ready_) {
+    this->configure_canvas_buffer_();
+  }
 
     this->last_display_buffer_ = frame_data;
     lv_obj_invalidate(this->canvas_obj_);
+  if (!this->allocate_display_buffer_(width, height)) {
+    if (!this->display_buffer_warning_logged_) {
+      ESP_LOGW(TAG, "Skipping frame copy - display buffer unavailable");
+      this->display_buffer_warning_logged_ = true;
+    }
+  } else {
+    this->display_buffer_warning_logged_ = false;
+    size_t copy_bytes = std::min(frame_bytes, this->display_buffer_size_);
+    if (copy_bytes > 0) {
+      memcpy(this->display_buffer_, frame_data, copy_bytes);
+      lv_obj_invalidate(this->canvas_obj_);
+    }
   }
 
   // QBUF - Remettre le buffer disponible
@@ -489,6 +292,8 @@ void LVGLCameraDisplay::dump_config() {
   ESP_LOGCONFIG(TAG, "  Resolution: %ux%u", this->width_, this->height_);
   ESP_LOGCONFIG(TAG, "  Buffers: %d (mmap zero-copy)", VIDEO_BUFFER_COUNT);
   ESP_LOGCONFIG(TAG, "  PPA: %s", this->ppa_handle_ ? "ENABLED" : "DISABLED");
+  ESP_LOGCONFIG(TAG, "  Display buffer: %ux%u (%zu bytes)",
+                this->display_width_, this->display_height_, this->display_buffer_size_);
 #else
   ESP_LOGCONFIG(TAG, "  Mode: NOT SUPPORTED (ESP32-P4 required)");
 #endif
@@ -516,14 +321,93 @@ void LVGLCameraDisplay::configure_canvas(lv_obj_t *canvas) {
     lv_coord_t h = lv_obj_get_height(canvas);
     ESP_LOGI(TAG, "   Canvas size: %dx%d", w, h);
     
+
     // Optimisations LVGL
     lv_obj_clear_flag(canvas, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_set_style_bg_opa(canvas, LV_OPA_TRANSP, 0);
+
+#ifdef USE_ESP32_VARIANT_ESP32P4
+    this->configure_canvas_buffer_();
+#endif
   }
 }
 
+#ifdef USE_ESP32_VARIANT_ESP32P4
+bool LVGLCameraDisplay::allocate_display_buffer_(uint16_t width, uint16_t height) {
+  if (width == 0 || height == 0) {
+    return false;
+  }
+
+  size_t required = static_cast<size_t>(width) * static_cast<size_t>(height) * 2;
+
+  if (this->display_buffer_ != nullptr && required == this->display_buffer_size_) {
+    if (this->display_width_ != width || this->display_height_ != height) {
+      this->display_width_ = width;
+      this->display_height_ = height;
+      this->configure_canvas_buffer_();
+    }
+    return true;
+  }
+
+  this->free_display_buffer_();
+
+  this->display_buffer_ = static_cast<uint8_t *>(heap_caps_aligned_alloc(64, required, MALLOC_CAP_SPIRAM));
+  if (this->display_buffer_ == nullptr) {
+    this->display_buffer_ = static_cast<uint8_t *>(heap_caps_aligned_alloc(64, required, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT));
+  }
+
+  if (this->display_buffer_ == nullptr) {
+    this->display_buffer_size_ = 0;
+    this->display_width_ = 0;
+    this->display_height_ = 0;
+    ESP_LOGE(TAG, "Failed to allocate %zu bytes for LVGL display buffer", required);
+    return false;
+  }
+
+  this->display_buffer_size_ = required;
+  this->display_width_ = width;
+  this->display_height_ = height;
+  memset(this->display_buffer_, 0, this->display_buffer_size_);
+  this->configure_canvas_buffer_();
+  return true;
+}
+
+void LVGLCameraDisplay::free_display_buffer_() {
+  if (this->display_buffer_ != nullptr) {
+    heap_caps_free(this->display_buffer_);
+    this->display_buffer_ = nullptr;
+  }
+  this->display_buffer_size_ = 0;
+  this->display_width_ = 0;
+  this->display_height_ = 0;
+  this->canvas_buffer_ready_ = false;
+  this->display_buffer_warning_logged_ = false;
+}
+
+void LVGLCameraDisplay::configure_canvas_buffer_() {
+  if (!this->canvas_obj_ || !this->display_buffer_ || this->display_width_ == 0 || this->display_height_ == 0) {
+    this->canvas_buffer_ready_ = false;
+    return;
+  }
+
+#if LV_VERSION_CHECK(9, 0, 0)
+  lv_canvas_set_buffer(this->canvas_obj_, this->display_buffer_, this->display_width_, this->display_height_,
+                       LV_COLOR_FORMAT_RGB565);
+#else
+  lv_canvas_set_buffer(this->canvas_obj_, this->display_buffer_, this->display_width_, this->display_height_,
+                       LV_IMG_CF_TRUE_COLOR);
+#endif
+
+  lv_obj_set_size(this->canvas_obj_, this->display_width_, this->display_height_);
+  ESP_LOGI(TAG, "   Canvas ready: %ux%u buffer @ %p", this->display_width_, this->display_height_, this->display_buffer_);
+  this->canvas_buffer_ready_ = true;
+  lv_obj_invalidate(this->canvas_obj_);
+}
+#endif
+
 }  // namespace lvgl_camera_display
 }  // namespace esphome
+
 
 
 
