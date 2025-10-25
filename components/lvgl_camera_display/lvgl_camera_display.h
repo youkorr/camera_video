@@ -14,7 +14,6 @@
 #include "../mipi_dsi_cam/mipi_dsi_cam.h"
 #include "driver/ppa.h"
 #include "esp_cache.h"
-#include "esp_heap_caps.h"
 #endif
 
 namespace esphome {
@@ -40,7 +39,18 @@ class LVGLCameraDisplay : public Component {
 
   // Configuration
   void set_camera(mipi_dsi_cam::MipiDsiCam *camera) { this->camera_ = camera; }
-@@ -54,64 +55,74 @@ class LVGLCameraDisplay : public Component {
+  void set_video_device(const char *dev) { this->video_device_ = dev; }
+  void set_width(uint16_t width) { this->width_ = width; }
+  void set_height(uint16_t height) { this->height_ = height; }
+  void configure_canvas(lv_obj_t *canvas);
+  void set_update_interval(uint32_t interval_ms) { this->update_interval_ = interval_ms; }
+  
+  // Transformations PPA
+  void set_rotation(Rotation rotation) { this->rotation_ = rotation; }
+  void set_mirror_x(bool enable) { this->mirror_x_ = enable; }
+  void set_mirror_y(bool enable) { this->mirror_y_ = enable; }
+  
+  // Stats
   uint32_t get_frame_count() const { return this->frame_count_; }
 
  protected:
@@ -67,22 +77,15 @@ class LVGLCameraDisplay : public Component {
   bool capture_frame_();
   void cleanup_();
   
-
   // PPA
   bool init_ppa_();
   void deinit_ppa_();
   bool transform_frame_(const uint8_t *src, uint8_t *dst);
-
-  // LVGL buffer management
-  bool allocate_display_buffer_(uint16_t width, uint16_t height);
-  void free_display_buffer_();
-  void configure_canvas_buffer_();
 #endif
 
   // Canvas LVGL
   lv_obj_t *canvas_obj_{nullptr};
   
-
   // Configuration
   uint16_t width_{1280};
   uint16_t height_{720};
@@ -96,17 +99,10 @@ class LVGLCameraDisplay : public Component {
   uint32_t last_update_time_{0};
   uint32_t last_fps_time_{0};
   
-
   // Flags
   bool first_update_{true};
   bool streaming_{false};
   uint8_t *last_display_buffer_{nullptr};
-  uint8_t *display_buffer_{nullptr};
-  size_t display_buffer_size_{0};
-  uint16_t display_width_{0};
-  uint16_t display_height_{0};
-  bool canvas_buffer_ready_{false};
-  bool display_buffer_warning_logged_{false};
 };
 
 }  // namespace lvgl_camera_display
