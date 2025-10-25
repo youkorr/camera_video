@@ -264,11 +264,11 @@ struct esp_video_ops {
 
     /*!< Set format to sensor */
 
-    esp_err_t (*set_sensor_format)(struct esp_video *video, const esp_cam_sensor_format_t *format);
+    esp_err_t (*set_sensor_format)(struct esp_video *video, const mipi_dsi_cam_format_t *format);
 
     /*!< Get format from sensor */
 
-    esp_err_t (*get_sensor_format)(struct esp_video *video, esp_cam_sensor_format_t *format);
+    esp_err_t (*get_sensor_format)(struct esp_video *video, mipi_dsi_cam_format_t *format);
 
     /*!< Query menu value */
 
