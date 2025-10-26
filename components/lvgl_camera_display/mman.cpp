@@ -4,10 +4,19 @@
 
 #include <fcntl.h>
 #include <errno.h>
-#include <cstring>  // Pour memset
+#include <cstring>
 #include "esp_log.h"
-#include "esp_heap_caps.h"  // Pour heap_caps_aligned_alloc et les MALLOC_CAP_*
 #include "../mipi_dsi_cam/mipi_dsi_cam_v4l2_adapter.h"
+// Forward declaration des structures V4L2
+namespace esphome {
+namespace mipi_dsi_cam {
+struct MipiCameraV4L2Context;
+}
+}
+
+// Fonction externe pour obtenir le contexte V4L2 depuis un fd
+extern "C" void* get_v4l2_context_from_fd(int fd);
+
 static const char *TAG = "mman";
 
 // Table simple de mapping pour ESP32-P4
@@ -32,10 +41,47 @@ static void init_mmap_table() {
 void *mmap(void *addr, size_t length, int prot, int flags, int fd, off_t offset) {
     init_mmap_table();
     
-    // Pour V4L2 sur ESP32-P4, mmap retourne directement l'adresse du buffer DMA
-    // Ces buffers sont pré-alloués par le driver vidéo
+    ESP_LOGI(TAG, "mmap() called: fd=%d, offset=%ld, length=%zu", fd, offset, length);
     
-    // Trouver un slot libre
+    // Pour V4L2, récupérer le buffer existant depuis le contexte
+    void *v4l2_ctx = get_v4l2_context_from_fd(fd);
+    if (!v4l2_ctx) {
+        ESP_LOGE(TAG, "❌ No V4L2 context for fd=%d", fd);
+        errno = EBADF;
+        return MAP_FAILED;
+    }
+    
+    // Cast vers le type concret
+    esphome::mipi_dsi_cam::MipiCameraV4L2Context *ctx = 
+        (esphome::mipi_dsi_cam::MipiCameraV4L2Context*)v4l2_ctx;
+    
+    // Vérifier que les buffers existent
+    if (!ctx->buffers) {
+        ESP_LOGE(TAG, "❌ No buffers allocated in V4L2 context");
+        errno = EINVAL;
+        return MAP_FAILED;
+    }
+    
+    // L'offset correspond à l'index du buffer dans V4L2
+    uint32_t buffer_index = (uint32_t)offset;
+    
+    if (buffer_index >= ctx->buffer_count) {
+        ESP_LOGE(TAG, "❌ Buffer index %u out of range (max: %u)", 
+                 buffer_index, ctx->buffer_count);
+        errno = EINVAL;
+        return MAP_FAILED;
+    }
+    
+    // Récupérer le pointeur du buffer existant
+    void *buffer = ctx->buffers->element[buffer_index].buffer;
+    
+    if (!buffer) {
+        ESP_LOGE(TAG, "❌ Buffer %u not allocated", buffer_index);
+        errno = ENOMEM;
+        return MAP_FAILED;
+    }
+    
+    // Trouver un slot libre dans la table mmap
     int slot = -1;
     for (int i = 0; i < MAX_MMAP_ENTRIES; i++) {
         if (mmap_table[i].addr == nullptr) {
@@ -45,34 +91,19 @@ void *mmap(void *addr, size_t length, int prot, int flags, int fd, off_t offset)
     }
     
     if (slot < 0) {
-        ESP_LOGE(TAG, "mmap table full");
+        ESP_LOGE(TAG, "❌ mmap table full");
         errno = ENOMEM;
         return MAP_FAILED;
     }
     
-    // Pour V4L2, on utilise l'offset comme index de buffer
-    // Le driver vidéo a déjà alloué les buffers en mémoire SPIRAM
-    // On retourne simplement un pointeur calculé
-    
-    // Note: Ceci est une simplification. Dans un vrai driver V4L2,
-    // mmap() interagirait avec le driver pour obtenir l'adresse réelle
-    // du buffer DMA via un appel ioctl spécial.
-    
-    // Pour l'instant, on alloue nous-même le buffer
-    void *buffer = heap_caps_aligned_alloc(64, length, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
-    if (!buffer) {
-        ESP_LOGE(TAG, "Failed to allocate mmap buffer");
-        errno = ENOMEM;
-        return MAP_FAILED;
-    }
-    
-    // Enregistrer dans la table
+    // Enregistrer dans la table (pour munmap)
     mmap_table[slot].addr = buffer;
     mmap_table[slot].length = length;
     mmap_table[slot].fd = fd;
     mmap_table[slot].offset = offset;
     
-    ESP_LOGD(TAG, "mmap: fd=%d offset=%ld length=%zu -> %p", fd, offset, length, buffer);
+    ESP_LOGI(TAG, "✅ mmap: fd=%d buffer[%u] -> %p (%zu bytes)", 
+             fd, buffer_index, buffer, length);
     
     return buffer;
 }
@@ -83,13 +114,13 @@ int munmap(void *addr, size_t length) {
     // Chercher l'entrée dans la table
     for (int i = 0; i < MAX_MMAP_ENTRIES; i++) {
         if (mmap_table[i].addr == addr) {
-            heap_caps_free(addr);
+            // NE PAS libérer le buffer - il appartient au V4L2 adapter
             mmap_table[i].addr = nullptr;
             mmap_table[i].length = 0;
             mmap_table[i].fd = -1;
             mmap_table[i].offset = 0;
             
-            ESP_LOGD(TAG, "munmap: %p length=%zu", addr, length);
+            ESP_LOGD(TAG, "munmap: %p (not freed, belongs to V4L2)", addr);
             return 0;
         }
     }
