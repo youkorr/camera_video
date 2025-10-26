@@ -101,16 +101,19 @@ void MipiDsiCam::setup() {
   this->initialized_ = true;
 
 #ifdef MIPI_DSI_CAM_ENABLE_JPEG
-  this->jpeg_encoder_ = std::make_unique<MipiDsiCamJPEGEncoder>(this);
-  this->jpeg_encoder_->init(80);
-  ESP_LOGI(TAG, "✅ JPEG encoder initialized (quality=80)");
+  if (this->enable_jpeg_) {
+    this->jpeg_encoder_ = std::make_unique<MipiDsiCamJPEGEncoder>(this);
+    this->jpeg_encoder_->init(80); // ou this->jpeg_quality_
+  }
 #endif
 
-#ifdef MIPI_DSI_CAM_ENABLE_H264
-  this->h264_encoder_ = std::make_unique<MipiDsiCamH264Encoder>(this);
-  this->h264_encoder_->init(2000000, 30);
-  ESP_LOGI(TAG, "✅ H.264 encoder initialized (bitrate=2Mbps, GOP=30)");
+#ifdef MIPI_DSI_CAM_ENABLE_H264  
+  if (this->enable_h264_) {
+    this->h264_encoder_ = std::make_unique<MipiDsiCamH264Encoder>(this);
+    this->h264_encoder_->init(2000000, 30); // ou this->framerate_
+  }
 #endif
+
 
   if (this->enable_v4l2_on_setup_) {
     ESP_LOGI(TAG, "Auto-enabling V4L2 adapter...");
