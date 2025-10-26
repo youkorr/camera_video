@@ -14,6 +14,8 @@
 extern "C" {
 #endif
 
+extern void* get_v4l2_context_from_fd(int fd);
+
 #define PROT_NONE       0x0             /* Page may not be accessed */
 #define PROT_READ       (1 << 0)        /* Page may be read */
 #define PROT_WRITE      (1 << 1)        /* Page may be written */
