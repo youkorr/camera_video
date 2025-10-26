@@ -3,8 +3,8 @@
 #include "esphome/core/component.h"
 #include "esphome/core/hal.h"
 #include "esphome/components/i2c/i2c.h"
+#include <memory>
 #include <string>
-#include <memory>  // pour std::unique_ptr
 
 #ifdef USE_ESP32_VARIANT_ESP32P4
 extern "C" {
@@ -15,7 +15,9 @@ extern "C" {
 }
 #endif
 
-// === Encodeurs matériels ===
+// =========================================
+// Encoders JPEG / H.264
+// =========================================
 #ifdef MIPI_DSI_CAM_ENABLE_JPEG
 #include "mipi_dsi_cam_encoders.h"
 #endif
@@ -24,30 +26,34 @@ extern "C" {
 #include "mipi_dsi_cam_encoders.h"
 #endif
 
+// =========================================
 // Forward declarations pour V4L2 et ISP
+// =========================================
 namespace esphome {
 namespace mipi_dsi_cam {
 class MipiDsiCamV4L2Adapter;
 class MipiDsiCamISPPipeline;
-}  // namespace mipi_dsi_cam
-}  // namespace esphome
+}
+}
 
 namespace esphome {
 namespace mipi_dsi_cam {
 
+// =========================================
+// Enum de formats pixel
+// =========================================
 enum PixelFormat {
   PIXEL_FORMAT_RGB565 = 0,
   PIXEL_FORMAT_YUV422 = 1,
   PIXEL_FORMAT_RAW8   = 2,
 };
 
-// ======================
-// Interface capteur
-// ======================
+// =========================================
+// Interface capteur générique
+// =========================================
 class ISensorDriver {
  public:
   virtual ~ISensorDriver() = default;
-
   virtual const char* get_name() const = 0;
   virtual uint16_t get_pid() const = 0;
   virtual uint8_t get_i2c_address() const = 0;
@@ -59,18 +65,18 @@ class ISensorDriver {
   virtual uint8_t get_fps() const = 0;
 
   virtual esp_err_t init() = 0;
-  virtual esp_err_t read_id(uint16_t *pid) = 0;
+  virtual esp_err_t read_id(uint16_t* pid) = 0;
   virtual esp_err_t start_stream() = 0;
   virtual esp_err_t stop_stream() = 0;
   virtual esp_err_t set_gain(uint32_t gain_index) = 0;
   virtual esp_err_t set_exposure(uint32_t exposure) = 0;
   virtual esp_err_t write_register(uint16_t reg, uint8_t value) = 0;
-  virtual esp_err_t read_register(uint16_t reg, uint8_t *value) = 0;
+  virtual esp_err_t read_register(uint16_t reg, uint8_t* value) = 0;
 };
 
-// ======================
-// Classe principale caméra
-// ======================
+// =========================================
+// Classe principale caméra MIPI DSI
+// =========================================
 class MipiDsiCam : public Component, public i2c::I2CDevice {
  public:
   void setup() override;
@@ -78,7 +84,6 @@ class MipiDsiCam : public Component, public i2c::I2CDevice {
   void dump_config() override;
   float get_setup_priority() const override { return setup_priority::DATA; }
 
-  // ---- Configuration capteur ----
   void set_name(const std::string &name) { this->name_ = name; }
   void set_external_clock_pin(int8_t pin) { this->external_clock_pin_ = pin; }
   void set_external_clock_frequency(uint32_t freq) { this->external_clock_frequency_ = freq; }
@@ -93,17 +98,16 @@ class MipiDsiCam : public Component, public i2c::I2CDevice {
   void set_jpeg_quality(uint8_t quality) { this->jpeg_quality_ = quality; }
   void set_framerate(uint8_t fps) { this->framerate_ = fps; }
 
-  // ---- Activation auto de V4L2 / ISP ----
+  // Activation auto du V4L2/ISP au setup
   void set_enable_v4l2(bool enable) { this->enable_v4l2_on_setup_ = enable; }
   void set_enable_isp(bool enable) { this->enable_isp_on_setup_ = enable; }
 
-  // ---- Capture ----
   bool capture_frame();
   bool start_streaming();
   bool stop_streaming();
   bool is_streaming() const { return this->streaming_; }
 
-  uint8_t *get_image_data() { return this->current_frame_buffer_; }
+  uint8_t* get_image_data() { return this->current_frame_buffer_; }
   size_t get_image_size() const { return this->frame_buffer_size_; }
   uint16_t get_image_width() const { return this->width_; }
   uint16_t get_image_height() const { return this->height_; }
@@ -111,7 +115,7 @@ class MipiDsiCam : public Component, public i2c::I2CDevice {
 
   bool has_external_clock() const { return this->external_clock_pin_ >= 0; }
 
-  // ---- Auto Exposure / White Balance ----
+  // Contrôle AE / WB
   void set_auto_exposure(bool enabled);
   void set_ae_target_brightness(uint8_t target);
   void set_manual_exposure(uint16_t exposure);
@@ -121,15 +125,15 @@ class MipiDsiCam : public Component, public i2c::I2CDevice {
   void adjust_gain(uint8_t gain_index);
   void set_brightness_level(uint8_t level);
 
-  // ---- Adaptateurs V4L2 / ISP ----
+  // Interface V4L2 et ISP
   void enable_v4l2_adapter();
   void enable_isp_pipeline();
 
-  MipiDsiCamV4L2Adapter *get_v4l2_adapter() { return this->v4l2_adapter_; }
-  MipiDsiCamISPPipeline *get_isp_pipeline() { return this->isp_pipeline_; }
+  MipiDsiCamV4L2Adapter* get_v4l2_adapter() { return this->v4l2_adapter_; }
+  MipiDsiCamISPPipeline* get_isp_pipeline() { return this->isp_pipeline_; }
 
  protected:
-  // ==== Configuration matérielle ====
+  // Configuration capteur
   int8_t external_clock_pin_{-1};
   uint32_t external_clock_frequency_{24000000};
   GPIOPin *reset_pin_{nullptr};
@@ -144,7 +148,7 @@ class MipiDsiCam : public Component, public i2c::I2CDevice {
 
   std::string name_{"MIPI Camera"};
   PixelFormat pixel_format_{PIXEL_FORMAT_RGB565};
-  uint8_t jpeg_quality_{80};
+  uint8_t jpeg_quality_{10};
   uint8_t framerate_{30};
 
   bool initialized_{false};
@@ -164,21 +168,29 @@ class MipiDsiCam : public Component, public i2c::I2CDevice {
 
   ISensorDriver *sensor_driver_{nullptr};
 
-  // ==== Auto Exposure ====
+  // Auto Exposure
   bool auto_exposure_enabled_{false};
   uint16_t current_exposure_{0x9C0};
   uint8_t current_gain_index_{20};
   uint32_t ae_target_brightness_{128};
   uint32_t last_ae_update_{0};
 
-  // ==== Balance des blancs ====
+  // White Balance
   float wb_red_gain_{1.3f};
   float wb_green_gain_{0.9f};
   float wb_blue_gain_{1.1f};
 
-  // ==== V4L2 et ISP ====
+  // Adaptateurs externes
   MipiDsiCamV4L2Adapter *v4l2_adapter_{nullptr};
   MipiDsiCamISPPipeline *isp_pipeline_{nullptr};
+
+#ifdef MIPI_DSI_CAM_ENABLE_JPEG
+  std::unique_ptr<MipiDsiCamJPEGEncoder> jpeg_encoder_{nullptr};
+#endif
+
+#ifdef MIPI_DSI_CAM_ENABLE_H264
+  std::unique_ptr<MipiDsiCamH264Encoder> h264_encoder_{nullptr};
+#endif
 
 #ifdef USE_ESP32_VARIANT_ESP32P4
   esp_cam_ctlr_handle_t csi_handle_{nullptr};
@@ -198,26 +210,23 @@ class MipiDsiCam : public Component, public i2c::I2CDevice {
   void update_auto_exposure_();
   uint32_t calculate_brightness_();
 
-  static bool IRAM_ATTR on_csi_new_frame_(esp_cam_ctlr_handle_t handle,
-                                          esp_cam_ctlr_trans_t *trans,
-                                          void *user_data);
+  static bool IRAM_ATTR on_csi_new_frame_(
+      esp_cam_ctlr_handle_t handle,
+      esp_cam_ctlr_trans_t *trans,
+      void *user_data
+  );
 
-  static bool IRAM_ATTR on_csi_frame_done_(esp_cam_ctlr_handle_t handle,
-                                           esp_cam_ctlr_trans_t *trans,
-                                           void *user_data);
-#endif
-
-#ifdef MIPI_DSI_CAM_ENABLE_JPEG
-  std::unique_ptr<MipiDsiCamJPEGEncoder> jpeg_encoder_{nullptr};
-#endif
-
-#ifdef MIPI_DSI_CAM_ENABLE_H264
-  std::unique_ptr<MipiDsiCamH264Encoder> h264_encoder_{nullptr};
+  static bool IRAM_ATTR on_csi_frame_done_(
+      esp_cam_ctlr_handle_t handle,
+      esp_cam_ctlr_trans_t *trans,
+      void *user_data
+  );
 #endif
 };
 
 }  // namespace mipi_dsi_cam
 }  // namespace esphome
+
 
 
 
