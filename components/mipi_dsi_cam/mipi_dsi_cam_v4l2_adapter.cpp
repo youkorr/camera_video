@@ -1,5 +1,6 @@
 #include "mipi_dsi_cam_v4l2_adapter.h"
 #include "esp_video_init.h"
+#include "esp_video_buffer.h"
 #include "esphome/core/log.h"
 #include <cstring>
 
