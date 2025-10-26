@@ -31,6 +31,12 @@ MipiDsiCamV4L2Adapter::MipiDsiCamV4L2Adapter(MipiDsiCam *camera) {
     this->context_.width = camera->get_image_width();
     this->context_.height = camera->get_image_height();
     this->context_.pixelformat = V4L2_PIX_FMT_RGB565;
+    this->context_.streaming = false;
+    this->context_.buffers = nullptr;
+    this->context_.buffer_count = 0;
+    this->context_.queued_count = 0;
+    this->context_.frame_count = 0;
+    this->context_.drop_count = 0;
 }
 
 MipiDsiCamV4L2Adapter::~MipiDsiCamV4L2Adapter() {
@@ -75,10 +81,17 @@ esp_err_t MipiDsiCamV4L2Adapter::init() {
 
 esp_err_t MipiDsiCamV4L2Adapter::deinit() {
     if (this->initialized_) {
+        // Arrêter le streaming si actif
+        if (this->context_.streaming) {
+            v4l2_stop(&this->context_, V4L2_BUF_TYPE_VIDEO_CAPTURE);
+        }
+        
+        // Libérer les buffers
         if (this->context_.buffers) {
             esp_video_buffer_destroy(this->context_.buffers);
             this->context_.buffers = nullptr;
         }
+        
         this->initialized_ = false;
         ESP_LOGI(TAG, "V4L2 adapter deinitialized");
     }
@@ -90,6 +103,7 @@ esp_err_t MipiDsiCamV4L2Adapter::deinit() {
 esp_err_t MipiDsiCamV4L2Adapter::v4l2_init(void *video) {
     MipiCameraV4L2Context *ctx = (MipiCameraV4L2Context*)video;
     ESP_LOGI(TAG, "V4L2 init callback");
+    ESP_LOGI(TAG, "  Camera: %s", ctx->camera->get_name().c_str());
     ESP_LOGI(TAG, "  Resolution: %ux%u", ctx->width, ctx->height);
     ESP_LOGI(TAG, "  Format: RGB565");
     return ESP_OK;
@@ -106,20 +120,35 @@ esp_err_t MipiDsiCamV4L2Adapter::v4l2_start(void *video, uint32_t type) {
     
     ESP_LOGI(TAG, "V4L2 start streaming (type=%u)", type);
     
-    if (type == V4L2_BUF_TYPE_VIDEO_CAPTURE) {
-        if (!cam->is_streaming()) {
-            bool success = cam->start_streaming();
-            if (success) {
-                ctx->streaming = true;
-                ESP_LOGI(TAG, "✅ Streaming started via V4L2");
-                return ESP_OK;
-            } else {
-                ESP_LOGE(TAG, "❌ Failed to start streaming");
-                return ESP_FAIL;
-            }
+    if (type != V4L2_BUF_TYPE_VIDEO_CAPTURE) {
+        ESP_LOGE(TAG, "❌ Unsupported buffer type: %u", type);
+        return ESP_ERR_NOT_SUPPORTED;
+    }
+    
+    if (ctx->streaming) {
+        ESP_LOGW(TAG, "⚠️  Already streaming");
+        return ESP_OK;
+    }
+    
+    // Vérifier qu'on a des buffers alloués
+    if (!ctx->buffers || ctx->buffer_count == 0) {
+        ESP_LOGE(TAG, "❌ No buffers allocated. Call VIDIOC_REQBUFS first");
+        return ESP_FAIL;
+    }
+    
+    // Démarrer le streaming de la caméra
+    if (!cam->is_streaming()) {
+        if (!cam->start_streaming()) {
+            ESP_LOGE(TAG, "❌ Failed to start camera streaming");
+            return ESP_FAIL;
         }
     }
     
+    ctx->streaming = true;
+    ctx->frame_count = 0;
+    ctx->drop_count = 0;
+    
+    ESP_LOGI(TAG, "✅ Streaming started via V4L2 (%u buffers)", ctx->buffer_count);
     return ESP_OK;
 }
 
@@ -129,19 +158,30 @@ esp_err_t MipiDsiCamV4L2Adapter::v4l2_stop(void *video, uint32_t type) {
     
     ESP_LOGI(TAG, "V4L2 stop streaming (type=%u)", type);
     
-    if (type == V4L2_BUF_TYPE_VIDEO_CAPTURE) {
-        if (cam->is_streaming()) {
-            bool success = cam->stop_streaming();
-            if (success) {
-                ctx->streaming = false;
-                ESP_LOGI(TAG, "✅ Streaming stopped via V4L2");
-                return ESP_OK;
-            } else {
-                ESP_LOGE(TAG, "❌ Failed to stop streaming");
-                return ESP_FAIL;
-            }
-        }
+    if (type != V4L2_BUF_TYPE_VIDEO_CAPTURE) {
+        return ESP_ERR_NOT_SUPPORTED;
     }
+    
+    if (!ctx->streaming) {
+        ESP_LOGW(TAG, "⚠️  Not streaming");
+        return ESP_OK;
+    }
+    
+    // Arrêter le streaming de la caméra si nécessaire
+    if (cam->is_streaming()) {
+        cam->stop_streaming();
+    }
+    
+    ctx->streaming = false;
+    
+    // Reset des buffers
+    if (ctx->buffers) {
+        esp_video_buffer_reset(ctx->buffers);
+        ctx->queued_count = 0;
+    }
+    
+    ESP_LOGI(TAG, "✅ Streaming stopped (frames: %u, drops: %u)", 
+             ctx->frame_count, ctx->drop_count);
     
     return ESP_OK;
 }
@@ -159,7 +199,7 @@ esp_err_t MipiDsiCamV4L2Adapter::v4l2_enum_format(void *video, uint32_t type,
     };
     
     if (index >= sizeof(formats) / sizeof(formats[0])) {
-        return ESP_ERR_NOT_SUPPORTED;
+        return ESP_ERR_NOT_FOUND;
     }
     
     *pixel_format = formats[index];
@@ -173,7 +213,7 @@ esp_err_t MipiDsiCamV4L2Adapter::v4l2_set_format(void *video, const void *format
     const struct v4l2_format *fmt = (const struct v4l2_format*)format;
     
     if (fmt->type != V4L2_BUF_TYPE_VIDEO_CAPTURE) {
-        ESP_LOGE(TAG, "Unsupported buffer type: %u", fmt->type);
+        ESP_LOGE(TAG, "❌ Unsupported buffer type: %u", fmt->type);
         return ESP_ERR_NOT_SUPPORTED;
     }
     
@@ -186,7 +226,7 @@ esp_err_t MipiDsiCamV4L2Adapter::v4l2_set_format(void *video, const void *format
     // Vérifier que le format demandé correspond au capteur
     if (pix->width != ctx->camera->get_image_width() || 
         pix->height != ctx->camera->get_image_height()) {
-        ESP_LOGE(TAG, "❌ Format mismatch: requested %ux%u, camera is %ux%u",
+        ESP_LOGE(TAG, "❌ Resolution mismatch: requested %ux%u, camera is %ux%u",
                  pix->width, pix->height, 
                  ctx->camera->get_image_width(), ctx->camera->get_image_height());
         return ESP_ERR_INVALID_ARG;
@@ -239,19 +279,33 @@ esp_err_t MipiDsiCamV4L2Adapter::v4l2_reqbufs(void *video, void *reqbufs) {
              req->count, req->type, req->memory);
     
     if (req->type != V4L2_BUF_TYPE_VIDEO_CAPTURE) {
+        ESP_LOGE(TAG, "❌ Unsupported buffer type: %u", req->type);
         return ESP_ERR_NOT_SUPPORTED;
     }
     
     if (req->memory != V4L2_MEMORY_MMAP) {
-        ESP_LOGE(TAG, "Only MMAP memory supported");
+        ESP_LOGE(TAG, "❌ Only MMAP memory supported");
         return ESP_ERR_NOT_SUPPORTED;
     }
     
-    // Créer les buffers si nécessaire
+    // Vérifier qu'on n'est pas en streaming
+    if (ctx->streaming) {
+        ESP_LOGE(TAG, "❌ Cannot change buffers while streaming");
+        return ESP_ERR_INVALID_STATE;
+    }
+    
+    // Libérer les anciens buffers
+    if (ctx->buffers) {
+        esp_video_buffer_destroy(ctx->buffers);
+        ctx->buffers = nullptr;
+        ctx->buffer_count = 0;
+    }
+    
+    // Créer les nouveaux buffers
     if (req->count > 0) {
-        if (ctx->buffers) {
-            esp_video_buffer_destroy(ctx->buffers);
-            ctx->buffers = nullptr;
+        if (req->count > 8) {
+            ESP_LOGW(TAG, "⚠️  Limiting buffer count from %u to 8", req->count);
+            req->count = 8;
         }
         
         struct esp_video_buffer_info buffer_info = {
@@ -264,13 +318,17 @@ esp_err_t MipiDsiCamV4L2Adapter::v4l2_reqbufs(void *video, void *reqbufs) {
         
         ctx->buffers = esp_video_buffer_create(&buffer_info);
         if (!ctx->buffers) {
-            ESP_LOGE(TAG, "Failed to create video buffers");
+            ESP_LOGE(TAG, "❌ Failed to create video buffers");
             return ESP_ERR_NO_MEM;
         }
         
         ctx->buffer_count = req->count;
+        ctx->queued_count = 0;
+        
         ESP_LOGI(TAG, "✅ Created %u buffers of %u bytes each", 
                  req->count, buffer_info.size);
+    } else {
+        ESP_LOGI(TAG, "✅ Freed all buffers");
     }
     
     return ESP_OK;
@@ -281,6 +339,8 @@ esp_err_t MipiDsiCamV4L2Adapter::v4l2_querybuf(void *video, void *buffer) {
     struct v4l2_buffer *buf = (struct v4l2_buffer*)buffer;
     
     if (!ctx->buffers || buf->index >= ctx->buffer_count) {
+        ESP_LOGE(TAG, "❌ Invalid buffer index: %u (max: %u)", 
+                 buf->index, ctx->buffer_count);
         return ESP_ERR_INVALID_ARG;
     }
     
@@ -291,8 +351,15 @@ esp_err_t MipiDsiCamV4L2Adapter::v4l2_querybuf(void *video, void *buffer) {
     buf->length = ctx->buffers->info.size;
     buf->m.offset = buf->index;  // Utiliser l'index comme offset
     
-    ESP_LOGD(TAG, "V4L2 querybuf[%u]: length=%u, offset=%u", 
-             buf->index, buf->length, buf->m.offset);
+    // Indiquer l'état du buffer
+    if (ELEMENT_IS_FREE(elem)) {
+        buf->flags = 0;  // Buffer disponible
+    } else {
+        buf->flags = V4L2_BUF_FLAG_QUEUED;  // Buffer en file d'attente
+    }
+    
+    ESP_LOGD(TAG, "V4L2 querybuf[%u]: length=%u, offset=%u, flags=0x%x", 
+             buf->index, buf->length, buf->m.offset, buf->flags);
     
     return ESP_OK;
 }
@@ -302,13 +369,23 @@ esp_err_t MipiDsiCamV4L2Adapter::v4l2_qbuf(void *video, void *buffer) {
     struct v4l2_buffer *buf = (struct v4l2_buffer*)buffer;
     
     if (!ctx->buffers || buf->index >= ctx->buffer_count) {
+        ESP_LOGE(TAG, "❌ Invalid buffer index: %u", buf->index);
         return ESP_ERR_INVALID_ARG;
     }
     
     struct esp_video_buffer_element *elem = &ctx->buffers->element[buf->index];
-    ELEMENT_SET_FREE(elem);  // Marquer comme prêt à recevoir des données
     
-    ESP_LOGV(TAG, "V4L2 qbuf[%u]", buf->index);
+    if (!ELEMENT_IS_FREE(elem)) {
+        ESP_LOGW(TAG, "⚠️  Buffer %u already queued", buf->index);
+        return ESP_ERR_INVALID_STATE;
+    }
+    
+    // Marquer le buffer comme prêt à recevoir des données
+    ELEMENT_SET_FREE(elem);
+    ctx->queued_count++;
+    
+    ESP_LOGV(TAG, "V4L2 qbuf[%u] (queued: %u/%u)", 
+             buf->index, ctx->queued_count, ctx->buffer_count);
     
     return ESP_OK;
 }
@@ -318,46 +395,69 @@ esp_err_t MipiDsiCamV4L2Adapter::v4l2_dqbuf(void *video, void *buffer) {
     struct v4l2_buffer *buf = (struct v4l2_buffer*)buffer;
     
     if (!ctx->buffers || !ctx->streaming) {
+        ESP_LOGE(TAG, "❌ Not streaming or no buffers");
         return ESP_FAIL;
     }
     
     // Capturer une nouvelle frame depuis la caméra
     if (!ctx->camera->capture_frame()) {
-        return ESP_FAIL;  // Pas de frame disponible
+        // Pas de frame disponible - comportement non-bloquant
+        return ESP_FAIL;
     }
     
-    // Copier les données dans le buffer
+    // Copier les données dans un buffer libre
     uint8_t *camera_data = ctx->camera->get_image_data();
     size_t camera_size = ctx->camera->get_image_size();
     
+    if (!camera_data) {
+        ESP_LOGE(TAG, "❌ No camera data available");
+        return ESP_FAIL;
+    }
+    
     // Trouver un buffer libre
+    struct esp_video_buffer_element *elem = nullptr;
     for (uint32_t i = 0; i < ctx->buffer_count; i++) {
-        struct esp_video_buffer_element *elem = &ctx->buffers->element[i];
-        if (ELEMENT_IS_FREE(elem)) {
-            // Copier les données
-            size_t copy_size = std::min(camera_size, ctx->buffers->info.size);
-            memcpy(elem->buffer, camera_data, copy_size);
-            elem->valid_size = copy_size;
-            
-            // Remplir la structure buffer
-            buf->index = i;
-            buf->type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-            buf->bytesused = copy_size;
-            buf->flags = 0;
-            buf->field = V4L2_FIELD_NONE;
-            buf->memory = V4L2_MEMORY_MMAP;
-            buf->m.offset = i;
-            buf->length = ctx->buffers->info.size;
-            
-            ELEMENT_SET_ALLOCATED(elem);
-            
-            ESP_LOGV(TAG, "V4L2 dqbuf[%u]: %u bytes", i, copy_size);
-            
-            return ESP_OK;
+        if (ELEMENT_IS_FREE(&ctx->buffers->element[i])) {
+            elem = &ctx->buffers->element[i];
+            break;
         }
     }
     
-    return ESP_FAIL;  // Pas de buffer disponible
+    if (!elem) {
+        ctx->drop_count++;
+        ESP_LOGW(TAG, "⚠️  No free buffer (dropped frames: %u)", ctx->drop_count);
+        return ESP_FAIL;
+    }
+    
+    // Copier les données
+    size_t copy_size = std::min(camera_size, ctx->buffers->info.size);
+    memcpy(elem->buffer, camera_data, copy_size);
+    elem->valid_size = copy_size;
+    
+    // Remplir la structure buffer
+    buf->index = elem->index;
+    buf->type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+    buf->bytesused = copy_size;
+    buf->flags = 0;
+    buf->field = V4L2_FIELD_NONE;
+    buf->memory = V4L2_MEMORY_MMAP;
+    buf->m.offset = elem->index;
+    buf->length = ctx->buffers->info.size;
+    buf->sequence = ctx->frame_count;
+    
+    // Timestamp
+    gettimeofday(&buf->timestamp, nullptr);
+    
+    ELEMENT_SET_ALLOCATED(elem);
+    if (ctx->queued_count > 0) {
+        ctx->queued_count--;
+    }
+    ctx->frame_count++;
+    
+    ESP_LOGV(TAG, "V4L2 dqbuf[%u]: %u bytes (frame %u)", 
+             elem->index, copy_size, ctx->frame_count);
+    
+    return ESP_OK;
 }
 
 esp_err_t MipiDsiCamV4L2Adapter::v4l2_querycap(void *video, void *cap) {
@@ -374,8 +474,13 @@ esp_err_t MipiDsiCamV4L2Adapter::v4l2_querycap(void *video, void *cap) {
     capability->capabilities = V4L2_CAP_VIDEO_CAPTURE | V4L2_CAP_STREAMING;
     capability->device_caps = capability->capabilities;
     
-    ESP_LOGI(TAG, "V4L2 querycap: driver=%s, card=%s", 
-             capability->driver, capability->card);
+    ESP_LOGI(TAG, "V4L2 querycap:");
+    ESP_LOGI(TAG, "  Driver: %s", capability->driver);
+    ESP_LOGI(TAG, "  Card: %s", capability->card);
+    ESP_LOGI(TAG, "  Version: %u.%u.%u", 
+             (capability->version >> 16) & 0xFF,
+             (capability->version >> 8) & 0xFF,
+             capability->version & 0xFF);
     
     return ESP_OK;
 }
