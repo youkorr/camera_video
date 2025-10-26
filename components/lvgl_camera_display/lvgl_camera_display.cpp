@@ -461,58 +461,39 @@ void LVGLCameraDisplay::loop() {
     return;
   }
 
-  // Appliquer les transformations PPA si nécessaire
+  // Déterminer le buffer de destination
   uint8_t *display_buffer = frame_data;
+  uint16_t canvas_width = this->width_;
+  uint16_t canvas_height = this->height_;
   
+  // Appliquer PPA si nécessaire (rotation/mirror)
   if (this->ppa_handle_ && this->transform_buffer_) {
+    if (this->rotation_ == ROTATION_90 || this->rotation_ == ROTATION_270) {
+      canvas_width = this->height_;
+      canvas_height = this->width_;
+    }
+    
     if (this->transform_frame_(frame_data, this->transform_buffer_)) {
       display_buffer = this->transform_buffer_;
     }
   }
 
-  // ⚠️ CRITIQUE: Copier les données AVANT de libérer le buffer
-  // Si pas de PPA, on doit copier dans un buffer temporaire
-  if (display_buffer == frame_data && this->canvas_obj_) {
-    // Copier les données car on va libérer le buffer V4L2 immédiatement
-    uint16_t canvas_width = (this->rotation_ == ROTATION_90 || this->rotation_ == ROTATION_270)
-                            ? this->height_ : this->width_;
-    uint16_t canvas_height = (this->rotation_ == ROTATION_90 || this->rotation_ == ROTATION_270)
-                             ? this->width_ : this->height_;
-    
-    size_t buffer_size = canvas_width * canvas_height * 2;
-    
-    // Allouer un buffer de travail si nécessaire
-    if (!this->work_buffer_) {
-      this->work_buffer_ = (uint8_t*)heap_caps_aligned_alloc(
-        64, buffer_size, MALLOC_CAP_SPIRAM
-      );
-    }
-    
-    if (this->work_buffer_) {
-      memcpy(this->work_buffer_, frame_data, buffer_size);
-      display_buffer = this->work_buffer_;
-    }
-  }
-
-  // ✅ LIBÉRER LE BUFFER V4L2 IMMÉDIATEMENT
-  this->release_v4l2_frame_();
-
-  // Afficher sur le canvas LVGL
+  // Afficher sur le canvas LVGL (avec lock comme M5Stack)
   if (this->canvas_obj_) {
-    uint16_t canvas_width = (this->rotation_ == ROTATION_90 || this->rotation_ == ROTATION_270)
-                            ? this->height_ : this->width_;
-    uint16_t canvas_height = (this->rotation_ == ROTATION_90 || this->rotation_ == ROTATION_270)
-                             ? this->width_ : this->height_;
-
+    // Lock display avant update
     lv_disp_t *disp = lv_obj_get_disp(this->canvas_obj_);
     if (disp) {
       _lv_disp_refr_timer(NULL);
     }
 
+    // Update canvas
     lv_canvas_set_buffer(this->canvas_obj_, display_buffer, 
                          canvas_width, canvas_height, LV_IMG_CF_TRUE_COLOR);
     lv_obj_invalidate(this->canvas_obj_);
   }
+
+  // ⚠️ IMPORTANT : Re-queue IMMÉDIATEMENT après usage (comme M5Stack)
+  this->release_v4l2_frame_();
 
   this->frame_count_++;
 
