@@ -60,7 +60,7 @@ class MipiDsiCam : public Component, public i2c::I2CDevice {
   void setup() override;
   void loop() override;
   void dump_config() override;
-  float get_setup_priority() const override { return setup_priority::DATA; }
+  float get_setup_priority() const override { return setup_priority::HARDWARE; }
 
   void set_name(const std::string &name) { this->name_ = name; }
   void set_external_clock_pin(int8_t pin) { this->external_clock_pin_ = pin; }
