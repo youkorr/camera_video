@@ -4,6 +4,7 @@
 #include <fcntl.h>
 #include <sys/ioctl.h>
 #include <errno.h>
+#include <cstring>
 
 static const char *TAG = "esp_video_init";
 
@@ -25,18 +26,18 @@ static ssize_t video_read(int fd, void *dst, size_t size);
 static ssize_t video_write(int fd, const void *src, size_t size);
 static int video_ioctl(int fd, int cmd, va_list args);
 
-// Table des opérations VFS
-static const esp_vfs_t video_vfs = {
-    .flags = ESP_VFS_FLAG_DEFAULT,
-    .write = &video_write,
-    .open = &video_open,
-    .fstat = NULL,
-    .close = &video_close,
-    .read = &video_read,
-    .fcntl = NULL,
-    .ioctl = &video_ioctl,
-    .fsync = NULL,
-};
+// Table des opérations VFS - initialisation dynamique pour éviter les erreurs d'ordre
+static esp_vfs_t video_vfs;
+
+static void init_video_vfs() {
+    memset(&video_vfs, 0, sizeof(video_vfs));
+    video_vfs.flags = ESP_VFS_FLAG_DEFAULT;
+    video_vfs.write = &video_write;
+    video_vfs.open = &video_open;
+    video_vfs.close = &video_close;
+    video_vfs.read = &video_read;
+    video_vfs.ioctl = &video_ioctl;
+}
 
 // Implémentation VFS
 static int video_open(const char *path, int flags, int mode) {
@@ -56,7 +57,7 @@ static int video_open(const char *path, int flags, int mode) {
         }
     }
     
-    ESP_LOGE(TAG, "❌ Failed to open %s", path, flags);
+    ESP_LOGE(TAG, "❌ Failed to open %s", path);
     errno = ENOENT;
     return -1;
 }
@@ -103,6 +104,18 @@ struct esp_video_ops {
     esp_err_t (*querycap)(void *video, void *cap);
 };
 
+// Définir les constantes ioctl correctement pour éviter les erreurs de narrowing
+// Utiliser des valeurs signées explicites
+static const int VIDIOC_QUERYCAP_CMD  = static_cast<int>(0xc0505600u);
+static const int VIDIOC_G_FMT_CMD     = static_cast<int>(0xc0cc5604u);
+static const int VIDIOC_S_FMT_CMD     = static_cast<int>(0xc0cc5605u);
+static const int VIDIOC_REQBUFS_CMD   = static_cast<int>(0xc0145608u);
+static const int VIDIOC_QUERYBUF_CMD  = static_cast<int>(0xc0585609u);
+static const int VIDIOC_QBUF_CMD      = static_cast<int>(0xc058560fu);
+static const int VIDIOC_DQBUF_CMD     = static_cast<int>(0xc0585611u);
+static const int VIDIOC_STREAMON_CMD  = 0x40045612;
+static const int VIDIOC_STREAMOFF_CMD = 0x40045613;
+
 static int video_ioctl(int fd, int cmd, va_list args) {
     int device_num = fd - 100;
     
@@ -125,66 +138,47 @@ static int video_ioctl(int fd, int cmd, va_list args) {
     // Router les commandes V4L2 vers les opérations appropriées
     esp_err_t ret = ESP_OK;
     
-    switch (cmd) {
-        case 0xc0505600:  // VIDIOC_QUERYCAP
-            if (ops && ops->querycap) {
-                ret = ops->querycap(vfs_dev->video_device, arg);
-            }
-            break;
-            
-        case 0xc0cc5604:  // VIDIOC_G_FMT
-            if (ops && ops->get_format) {
-                ret = ops->get_format(vfs_dev->video_device, arg);
-            }
-            break;
-            
-        case 0xc0cc5605:  // VIDIOC_S_FMT
-            if (ops && ops->set_format) {
-                ret = ops->set_format(vfs_dev->video_device, arg);
-            }
-            break;
-            
-        case 0xc0145608:  // VIDIOC_REQBUFS
-            if (ops && ops->reqbufs) {
-                ret = ops->reqbufs(vfs_dev->video_device, arg);
-            }
-            break;
-            
-        case 0xc0585609:  // VIDIOC_QUERYBUF
-            if (ops && ops->querybuf) {
-                ret = ops->querybuf(vfs_dev->video_device, arg);
-            }
-            break;
-            
-        case 0xc058560f:  // VIDIOC_QBUF
-            if (ops && ops->qbuf) {
-                ret = ops->qbuf(vfs_dev->video_device, arg);
-            }
-            break;
-            
-        case 0xc0585611:  // VIDIOC_DQBUF
-            if (ops && ops->dqbuf) {
-                ret = ops->dqbuf(vfs_dev->video_device, arg);
-            }
-            break;
-            
-        case 0x40045612:  // VIDIOC_STREAMON
-            if (ops && ops->start) {
-                uint32_t type = *(uint32_t*)arg;
-                ret = ops->start(vfs_dev->video_device, type);
-            }
-            break;
-            
-        case 0x40045613:  // VIDIOC_STREAMOFF
-            if (ops && ops->stop) {
-                uint32_t type = *(uint32_t*)arg;
-                ret = ops->stop(vfs_dev->video_device, type);
-            }
-            break;
-            
-        default:
-            ESP_LOGW(TAG, "Unhandled ioctl 0x%x", cmd);
-            return 0;  // Succès par défaut pour les commandes non implémentées
+    if (cmd == VIDIOC_QUERYCAP_CMD) {
+        if (ops && ops->querycap) {
+            ret = ops->querycap(vfs_dev->video_device, arg);
+        }
+    } else if (cmd == VIDIOC_G_FMT_CMD) {
+        if (ops && ops->get_format) {
+            ret = ops->get_format(vfs_dev->video_device, arg);
+        }
+    } else if (cmd == VIDIOC_S_FMT_CMD) {
+        if (ops && ops->set_format) {
+            ret = ops->set_format(vfs_dev->video_device, arg);
+        }
+    } else if (cmd == VIDIOC_REQBUFS_CMD) {
+        if (ops && ops->reqbufs) {
+            ret = ops->reqbufs(vfs_dev->video_device, arg);
+        }
+    } else if (cmd == VIDIOC_QUERYBUF_CMD) {
+        if (ops && ops->querybuf) {
+            ret = ops->querybuf(vfs_dev->video_device, arg);
+        }
+    } else if (cmd == VIDIOC_QBUF_CMD) {
+        if (ops && ops->qbuf) {
+            ret = ops->qbuf(vfs_dev->video_device, arg);
+        }
+    } else if (cmd == VIDIOC_DQBUF_CMD) {
+        if (ops && ops->dqbuf) {
+            ret = ops->dqbuf(vfs_dev->video_device, arg);
+        }
+    } else if (cmd == VIDIOC_STREAMON_CMD) {
+        if (ops && ops->start) {
+            uint32_t type = *(uint32_t*)arg;
+            ret = ops->start(vfs_dev->video_device, type);
+        }
+    } else if (cmd == VIDIOC_STREAMOFF_CMD) {
+        if (ops && ops->stop) {
+            uint32_t type = *(uint32_t*)arg;
+            ret = ops->stop(vfs_dev->video_device, type);
+        }
+    } else {
+        ESP_LOGW(TAG, "Unhandled ioctl 0x%x", cmd);
+        return 0;  // Succès par défaut pour les commandes non implémentées
     }
     
     if (ret != ESP_OK) {
@@ -202,6 +196,7 @@ esp_err_t esp_video_register_device(int device_id, void *video_device, void *use
     }
     
     if (!s_vfs_registered) {
+        init_video_vfs();
         esp_err_t ret = esp_vfs_register("/dev", &video_vfs, NULL);
         if (ret != ESP_OK && ret != ESP_ERR_INVALID_STATE) {
             ESP_LOGE(TAG, "Failed to register VFS: 0x%x", ret);
@@ -242,6 +237,7 @@ extern "C" esp_err_t esp_video_init(const esp_video_init_config_t *config)
 
     // Enregistrer le VFS pour /dev si pas déjà fait
     if (!s_vfs_registered) {
+        init_video_vfs();
         esp_err_t ret = esp_vfs_register("/dev", &video_vfs, NULL);
         if (ret != ESP_OK && ret != ESP_ERR_INVALID_STATE) {
             ESP_LOGE(TAG, "Failed to register video VFS: 0x%x", ret);
