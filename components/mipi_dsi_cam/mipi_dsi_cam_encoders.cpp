@@ -1,7 +1,7 @@
 #ifdef MIPI_DSI_CAM_ENABLE_JPEG
 #ifdef MIPI_DSI_CAM_ENABLE_H264
 
-#include "mipi_dsi_cam_encoders_optimized.h"
+#include "mipi_dsi_cam_encoders.h"
 #include "esphome/core/log.h"
 #include <unistd.h>
 #include <sys/mman.h>
