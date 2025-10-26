@@ -16,7 +16,6 @@
 #ifdef USE_ESP32_VARIANT_ESP32P4
 
 #include "driver/ledc.h"
-//#include "mipi_dsi_cam_video_devices.h"
 #include "mipi_dsi_cam_encoders.h"
 
 namespace esphome {
