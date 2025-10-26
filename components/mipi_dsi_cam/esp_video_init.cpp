@@ -189,8 +189,8 @@ static int video_ioctl(int fd, int cmd, va_list args) {
     return 0;
 }
 
-// Fonction pour enregistrer un device vidéo
-esp_err_t esp_video_register_device(int device_id, void *video_device, void *user_ctx, const void *ops) {
+// Fonction pour enregistrer un device vidéo - AVEC extern "C"
+extern "C" esp_err_t esp_video_register_device(int device_id, void *video_device, void *user_ctx, const void *ops) {
     if (device_id < 0 || device_id >= 4) {
         return ESP_ERR_INVALID_ARG;
     }
