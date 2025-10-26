@@ -66,29 +66,7 @@ def load_sensors():
     except Exception as e:
         logger.error(f"Error loading SC202CS: {e}")
     
-    try:
-        from .sensor_mipi_csi_ov5647 import get_sensor_info, get_driver_code
-        AVAILABLE_SENSORS['ov5647'] = {
-            'info': get_sensor_info(),
-            'driver': get_driver_code
-        }
-        logger.info("OV5647 sensor loaded (800x640)")
-    except ImportError as e:
-        logger.warning(f"OV5647 sensor not available: {e}")
-    except Exception as e:
-        logger.error(f"Error loading OV5647: {e}")
-    
-    try:
-        from .sensor_mipi_csi_ov02c10 import get_sensor_info, get_driver_code
-        AVAILABLE_SENSORS['ov02c10'] = {
-            'info': get_sensor_info(),
-            'driver': get_driver_code
-        }
-        logger.info("OV02C10 sensor loaded (1280x800)")
-    except ImportError as e:
-        logger.warning(f"OV02C10 sensor not available: {e}")
-    except Exception as e:
-        logger.error(f"Error loading OV02C10: {e}")
+
     
     if not AVAILABLE_SENSORS:
         raise cv.Invalid(
