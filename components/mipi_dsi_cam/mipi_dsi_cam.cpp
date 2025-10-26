@@ -1,6 +1,7 @@
 #include "mipi_dsi_cam.h"
 #include "esphome/core/log.h"
 #include "esphome/core/application.h"
+#include "mipi_dsi_cam_video_devices.h"
 
 #include "mipi_dsi_cam_drivers_generated.h"
 
