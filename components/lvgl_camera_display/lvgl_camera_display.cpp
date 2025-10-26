@@ -275,7 +275,8 @@ bool LVGLCameraDisplay::capture_v4l2_frame_(uint8_t **frame_data) {
 
   if (ioctl(this->video_fd_, VIDIOC_DQBUF, &buf) < 0) {
     if (errno == EAGAIN) {
-      // Pas de frame disponible
+      // Pas de frame disponible - normal en mode non-bloquant
+      ESP_LOGV(TAG, "No frame available (EAGAIN)");
       return false;
     }
     ESP_LOGE(TAG, "VIDIOC_DQBUF failed: errno=%d", errno);
@@ -285,6 +286,9 @@ bool LVGLCameraDisplay::capture_v4l2_frame_(uint8_t **frame_data) {
   // Récupérer le pointeur vers les données
   *frame_data = this->mmap_buffers_[buf.index];
   this->current_buffer_index_ = buf.index;
+  
+  ESP_LOGV(TAG, "✅ Frame captured: buffer[%d], %u bytes", 
+           buf.index, buf.bytesused);
 
   return true;
 }
