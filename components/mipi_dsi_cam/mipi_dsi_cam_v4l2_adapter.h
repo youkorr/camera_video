@@ -1,31 +1,64 @@
 #pragma once
 
-//#ifdef MIPI_DSI_CAM_ENABLE_V4L2
-
 #include "mipi_dsi_cam.h"
+#include "esp_video_buffer.h"
 
 #ifdef USE_ESP32_VARIANT_ESP32P4
 
-// Inclure les headers V4L2 d'ESP-IDF
 extern "C" {
   #include "videodev2.h"
 }
 
+// Déclaration de la fonction d'enregistrement du device
+extern "C" esp_err_t esp_video_register_device(int device_id, void *video_device, 
+                                                void *user_ctx, const void *ops);
+
 namespace esphome {
 namespace mipi_dsi_cam {
 
-// Structure pour passer le contexte entre le video device et notre camera
+// Structure complète pour le contexte V4L2
 struct MipiCameraV4L2Context {
   MipiDsiCam *camera;
   void *video_device;
+  
+  // Configuration du format
+  uint32_t width;
+  uint32_t height;
+  uint32_t pixelformat;
+  
+  // État du streaming
+  bool streaming;
+  
+  // Gestion des buffers
+  struct esp_video_buffer *buffers;
+  uint32_t buffer_count;
+  uint32_t queued_count;
+  
+  // Statistiques
+  uint32_t frame_count;
+  uint32_t drop_count;
+};
+
+// Structure pour les opérations V4L2
+struct esp_video_ops {
+  esp_err_t (*init)(void *video);
+  esp_err_t (*deinit)(void *video);
+  esp_err_t (*start)(void *video, uint32_t type);
+  esp_err_t (*stop)(void *video, uint32_t type);
+  esp_err_t (*enum_format)(void *video, uint32_t type, uint32_t index, uint32_t *pixel_format);
+  esp_err_t (*set_format)(void *video, const void *format);
+  esp_err_t (*get_format)(void *video, void *format);
+  esp_err_t (*reqbufs)(void *video, void *reqbufs);
+  esp_err_t (*querybuf)(void *video, void *buffer);
+  esp_err_t (*qbuf)(void *video, void *buffer);
+  esp_err_t (*dqbuf)(void *video, void *buffer);
+  esp_err_t (*querycap)(void *video, void *cap);
 };
 
 /**
  * @brief Adaptateur V4L2 pour mipi_dsi_cam
  * 
- * Cette classe crée un pont entre le driver bas niveau mipi_dsi_cam
- * et l'interface V4L2 standard d'ESP-IDF pour permettre l'utilisation
- * avec les pipelines vidéo avancés (JPEG, H.264, ISP avancé, etc.)
+ * Implémentation complète de l'interface V4L2 standard
  */
 class MipiDsiCamV4L2Adapter {
  public:
@@ -46,103 +79,39 @@ class MipiDsiCamV4L2Adapter {
   
   /**
    * @brief Retourne le pointeur vers le device V4L2
-   * @return Pointeur vers la structure esp_video
    */
-  void* get_video_device() { return this->context_.video_device; }
+  void* get_video_device() { return &this->context_; }
   
   /**
    * @brief Vérifie si l'adaptateur est initialisé
    */
-  bool is_initialized() const { return this->context_.video_device != nullptr; }
+  bool is_initialized() const { return this->initialized_; }
   
-  // ===== Callbacks V4L2 pour le driver =====
-  // Ces fonctions sont appelées par le framework V4L2 d'ESP-IDF
-  // IMPORTANT: Elles doivent être publiques pour être utilisées dans esp_video_ops
+  // ===== Callbacks V4L2 (publics pour esp_video_ops) =====
   
-  /**
-   * @brief Initialise le device V4L2
-   */
   static esp_err_t v4l2_init(void *video);
-  
-  /**
-   * @brief Dé-initialise le device V4L2
-   */
   static esp_err_t v4l2_deinit(void *video);
-  
-  /**
-   * @brief Démarre le streaming vidéo
-   * @param type Type de buffer (V4L2_BUF_TYPE_VIDEO_CAPTURE)
-   */
   static esp_err_t v4l2_start(void *video, uint32_t type);
-  
-  /**
-   * @brief Arrête le streaming vidéo
-   * @param type Type de buffer (V4L2_BUF_TYPE_VIDEO_CAPTURE)
-   */
   static esp_err_t v4l2_stop(void *video, uint32_t type);
-  
-  /**
-   * @brief Énumère les formats disponibles
-   * @param type Type de buffer
-   * @param index Index du format à énumérer
-   * @param pixel_format Format retourné (fourcc code V4L2)
-   */
   static esp_err_t v4l2_enum_format(void *video, uint32_t type, 
                                      uint32_t index, uint32_t *pixel_format);
+  static esp_err_t v4l2_set_format(void *video, const void *format);
+  static esp_err_t v4l2_get_format(void *video, void *format);
+  static esp_err_t v4l2_reqbufs(void *video, void *reqbufs);
+  static esp_err_t v4l2_querybuf(void *video, void *buffer);
+  static esp_err_t v4l2_qbuf(void *video, void *buffer);
+  static esp_err_t v4l2_dqbuf(void *video, void *buffer);
+  static esp_err_t v4l2_querycap(void *video, void *cap);
   
-  /**
-   * @brief Configure le format vidéo
-   * @param format Structure v4l2_format contenant le format souhaité
-   */
-  static esp_err_t v4l2_set_format(void *video, const struct v4l2_format *format);
-  
-  /**
-   * @brief Récupère le format vidéo actuel
-   * @param format Structure v4l2_format à remplir
-   */
-  static esp_err_t v4l2_get_format(void *video, struct v4l2_format *format);
-  
-  /**
-   * @brief Notification d'événements
-   * @param event Type d'événement
-   * @param arg Argument de l'événement
-   */
-  static esp_err_t v4l2_notify(void *video, int event, void *arg);
-  
-  /**
-   * @brief Configure des contrôles étendus (exposition, gain, etc.)
-   * @param ctrls Structure contenant les contrôles à configurer
-   */
-  static esp_err_t v4l2_set_ext_ctrl(void *video, const struct v4l2_ext_controls *ctrls);
-  
-  /**
-   * @brief Récupère les valeurs des contrôles étendus
-   * @param ctrls Structure contenant les contrôles à lire
-   */
-  static esp_err_t v4l2_get_ext_ctrl(void *video, struct v4l2_ext_controls *ctrls);
-  
-  /**
-   * @brief Interroge les propriétés d'un contrôle
-   * @param qctrl Structure à remplir avec les infos du contrôle
-   */
-  static esp_err_t v4l2_query_ext_ctrl(void *video, struct v4l2_query_ext_ctrl *qctrl);
-  
-  /**
-   * @brief Configure les paramètres du capteur (résolution, fps, etc.)
-   */
-  static esp_err_t v4l2_set_sensor_format(void *video, const void *format);
-  
-  /**
-   * @brief Récupère les paramètres du capteur
-   */
-  static esp_err_t v4l2_get_sensor_format(void *video, void *format);
-
  protected:
   MipiCameraV4L2Context context_;
+  bool initialized_{false};
+  
+  // Table des opérations V4L2
+  static const esp_video_ops s_video_ops;
 };
 
 } // namespace mipi_dsi_cam
 } // namespace esphome
 
 #endif // USE_ESP32_VARIANT_ESP32P4
-//#endif // MIPI_DSI_CAM_ENABLE_V4L2
