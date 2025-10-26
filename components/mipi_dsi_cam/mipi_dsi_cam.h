@@ -4,6 +4,7 @@
 #include "esphome/core/hal.h"
 #include "esphome/components/i2c/i2c.h"
 #include <string>
+#include <memory>  // pour std::unique_ptr
 
 #ifdef USE_ESP32_VARIANT_ESP32P4
 extern "C" {
@@ -14,7 +15,16 @@ extern "C" {
 }
 #endif
 
-// Forward declarations pour V4L2 et ISP - TOUJOURS disponibles
+// === Encodeurs matériels ===
+#ifdef MIPI_DSI_CAM_ENABLE_JPEG
+#include "mipi_dsi_cam_encoders.h"
+#endif
+
+#ifdef MIPI_DSI_CAM_ENABLE_H264
+#include "mipi_dsi_cam_encoders.h"
+#endif
+
+// Forward declarations pour V4L2 et ISP
 namespace esphome {
 namespace mipi_dsi_cam {
 class MipiDsiCamV4L2Adapter;
@@ -209,12 +219,5 @@ class MipiDsiCam : public Component, public i2c::I2CDevice {
 }  // namespace mipi_dsi_cam
 }  // namespace esphome
 
-#ifdef MIPI_DSI_CAM_ENABLE_JPEG
-#include "mipi_dsi_cam_encoders.h"
-#endif
-
-#ifdef MIPI_DSI_CAM_ENABLE_H264
-#include "mipi_dsi_cam_encoders.h"
-#endif
 
 
