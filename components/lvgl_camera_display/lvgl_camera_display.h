@@ -55,6 +55,10 @@ class LVGLCameraDisplay : public Component {
   uint8_t *mmap_buffers_[VIDEO_BUFFER_COUNT]{nullptr};
   size_t buffer_length_{0};
   int current_buffer_index_{-1};
+
+  
+  // Buffer de travail pour copie immédiate
+  uint8_t *work_buffer_{nullptr};  // NOUVEAU
   
   // PPA
   ppa_client_handle_t ppa_handle_{nullptr};
