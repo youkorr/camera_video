@@ -4,7 +4,7 @@
 #include "mipi_dsi_cam_encoders.h"
 #include "esphome/core/log.h"
 #include <unistd.h>
-#include <sys/mman.h>
+#include ../lvgl_camera_display/mman.h"
 
 #ifdef USE_ESP32_VARIANT_ESP32P4
 
