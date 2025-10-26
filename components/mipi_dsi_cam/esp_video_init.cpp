@@ -24,15 +24,25 @@ static bool s_vfs_registered = false;
 static struct {
     int fd;
     int device_num;
+    bool is_temporary;  // Indique si c'est un fd temporaire à remplacer
 } s_fd_map[MAX_FD_MAPPINGS];
 static int s_fd_map_count = 0;
 
-static void register_fd_mapping(int fd, int device_num) {
+// ✅ Déclarations forward des fonctions internes
+static void register_fd_mapping(int fd, int device_num, bool is_temporary);
+static int get_device_num_from_fd(int fd);
+static void unregister_fd_mapping(int fd);
+static void update_fd_mapping(int old_fd, int new_fd);
+
+// ✅ Fonctions de mapping
+static void register_fd_mapping(int fd, int device_num, bool is_temporary) {
     if (s_fd_map_count < MAX_FD_MAPPINGS) {
         s_fd_map[s_fd_map_count].fd = fd;
         s_fd_map[s_fd_map_count].device_num = device_num;
+        s_fd_map[s_fd_map_count].is_temporary = is_temporary;
         s_fd_map_count++;
-        ESP_LOGI(TAG, "✅ Registered fd=%d -> device_num=%d", fd, device_num);
+        ESP_LOGI(TAG, "✅ Registered fd=%d -> device_num=%d %s", 
+                 fd, device_num, is_temporary ? "(temporary)" : "");
     }
 }
 
@@ -59,12 +69,37 @@ static void unregister_fd_mapping(int fd) {
     }
 }
 
+static void update_fd_mapping(int old_fd, int new_fd) {
+    for (int i = 0; i < s_fd_map_count; i++) {
+        if (s_fd_map[i].fd == old_fd && s_fd_map[i].is_temporary) {
+            ESP_LOGI(TAG, "Updating fd mapping: %d -> %d (device_num=%d)", 
+                     old_fd, new_fd, s_fd_map[i].device_num);
+            s_fd_map[i].fd = new_fd;
+            s_fd_map[i].is_temporary = false;
+            return;
+        }
+    }
+}
+
+// ✅ FONCTION PUBLIQUE pour enregistrer le vrai fd après open()
+extern "C" void register_fd_to_device(int real_fd, int temp_fd) {
+    ESP_LOGI(TAG, "register_fd_to_device: real_fd=%d, temp_fd=%d", real_fd, temp_fd);
+    update_fd_mapping(temp_fd, real_fd);
+}
+
 // ✅ FONCTION HELPER : Récupérer le contexte V4L2 depuis un fd
 extern "C" void* get_v4l2_context_from_fd(int fd) {
     int device_num = get_device_num_from_fd(fd);
     
     if (device_num < 0 || device_num >= 4) {
         ESP_LOGE(TAG, "❌ Invalid or unmapped fd: %d", fd);
+        // Afficher la table de mapping pour debug
+        ESP_LOGE(TAG, "Current fd mappings:");
+        for (int i = 0; i < s_fd_map_count; i++) {
+            ESP_LOGE(TAG, "  [%d] fd=%d -> device_num=%d %s", 
+                     i, s_fd_map[i].fd, s_fd_map[i].device_num,
+                     s_fd_map[i].is_temporary ? "(temp)" : "");
+        }
         return nullptr;
     }
     
@@ -110,16 +145,19 @@ static int video_open(const char *path, int flags, int mode) {
             if (s_video_devices[device_num].video_device) {
                 s_video_devices[device_num].ref_count++;
                 
-                // ✅ IMPORTANT: Retourner un fd unique (pas de formule)
-                // Le VFS va nous attribuer automatiquement un fd
-                // On va l'enregistrer dans le mapping dans la vraie fonction open
-                ESP_LOGI(TAG, "✅ Opening video%d (refs=%d)", 
-                         device_num, s_video_devices[device_num].ref_count);
+                // ✅ Créer un fd temporaire unique
+                // On utilise 1000 + device_num pour être sûr qu'il soit unique
+                int temp_fd = 1000 + device_num;
                 
-                // Retourner 0 pour succès, le VFS attribuera le vrai fd
-                // MAIS on doit passer device_num dans les données privées du fd
-                // Solution: utiliser un fd temporaire encodé
-                return 1000 + device_num;  // Temporaire, sera remappé
+                // ✅ Enregistrer le mapping temporaire
+                register_fd_mapping(temp_fd, device_num, true);
+                
+                ESP_LOGI(TAG, "✅ Opening video%d (temp_fd=%d, refs=%d)", 
+                         device_num, temp_fd, s_video_devices[device_num].ref_count);
+                
+                // Retourner le fd temporaire
+                // Le VFS va le wrapper, mais on pourra le retrouver plus tard
+                return temp_fd;
             }
         }
     }
@@ -285,9 +323,6 @@ extern "C" esp_err_t esp_video_register_device(int device_id, void *video_device
     s_video_devices[device_id].ref_count = 0;
     
     ESP_LOGI(TAG, "✅ Registered /dev/video%d (context: %p)", device_id, video_device);
-    
-    // ✅ Pré-mapper le device pour les futurs open()
-    // On va mapper le fd lors du premier open réel
     
     return ESP_OK;
 }
