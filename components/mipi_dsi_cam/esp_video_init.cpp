@@ -140,7 +140,7 @@ static int video_ioctl(int fd, int cmd, va_list args) {
     const esp_video_ops *ops = (const esp_video_ops*)vfs_dev->ops;
     void *arg = va_arg(args, void*);
     
-    ESP_LOGD(TAG, "ioctl(fd=%d, cmd=0x%08x) on video%d - type='%c' nr=%d", 
+    ESP_LOGV(TAG, "ioctl(fd=%d, cmd=0x%08x) on video%d - type='%c' nr=%d", 
              fd, cmd, device_num, IOCTL_TYPE(cmd), IOCTL_NR(cmd));
     
     // Router les commandes V4L2 vers les opérations appropriées
@@ -184,21 +184,23 @@ static int video_ioctl(int fd, int cmd, va_list args) {
             uint32_t type = *(uint32_t*)arg;
             ret = ops->stop(vfs_dev->video_device, type);
         }
-    } else if (ioctl_match(cmd, 'V', 27)) {  // VIDIOC_G_CTRL
-        ESP_LOGD(TAG, "VIDIOC_G_CTRL - not implemented");
-        return 0;
-    } else if (ioctl_match(cmd, 'V', 28)) {  // VIDIOC_S_CTRL
-        ESP_LOGD(TAG, "VIDIOC_S_CTRL - not implemented");
-        return 0;
     } else {
-        ESP_LOGW(TAG, "Unhandled ioctl cmd=0x%08x type='%c' nr=%d", 
-                 cmd, IOCTL_TYPE(cmd), IOCTL_NR(cmd));
-        return 0;  // Succès par défaut pour les commandes non implémentées
+        ESP_LOGV(TAG, "Unhandled ioctl cmd=0x%08x", cmd);
+        return 0;
     }
     
     if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "ioctl operation failed: 0x%x", ret);
-        errno = EIO;
+        // Mapper les codes d'erreur ESP vers errno
+        if (ret == ESP_ERR_NOT_FOUND) {
+            errno = EAGAIN;  // ⚠️ Pas de données disponibles (non-blocking)
+        } else if (ret == ESP_ERR_INVALID_STATE) {
+            errno = EIO;
+        } else if (ret == ESP_ERR_INVALID_ARG) {
+            errno = EINVAL;
+        } else {
+            errno = EIO;
+        }
+        ESP_LOGV(TAG, "ioctl failed: ret=0x%x → errno=%d", ret, errno);
         return -1;
     }
     
