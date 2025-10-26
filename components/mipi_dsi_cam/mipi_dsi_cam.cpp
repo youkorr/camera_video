@@ -15,6 +15,8 @@
 #ifdef USE_ESP32_VARIANT_ESP32P4
 
 #include "driver/ledc.h"
+//#include "mipi_dsi_cam_video_devices.h"
+#include "mipi_dsi_cam_encoders.h"
 
 namespace esphome {
 namespace mipi_dsi_cam {
@@ -32,19 +34,19 @@ void MipiDsiCam::setup() {
     this->reset_pin_->digital_write(true);
     delay(20);
   }
-  
+
   if (!this->create_sensor_driver_()) {
     ESP_LOGE(TAG, "Driver creation failed");
     this->mark_failed();
     return;
   }
-  
+
   if (!this->init_sensor_()) {
     ESP_LOGE(TAG, "Sensor init failed");
     this->mark_failed();
     return;
   }
-  
+
   if (this->has_external_clock()) {
     if (!this->init_external_clock_()) {
       ESP_LOGE(TAG, "External clock init failed");
@@ -54,38 +56,67 @@ void MipiDsiCam::setup() {
   } else {
     ESP_LOGI(TAG, "No external clock configured - sensor must use internal clock");
   }
-  
+
   if (!this->init_ldo_()) {
     ESP_LOGE(TAG, "LDO init failed");
     this->mark_failed();
     return;
   }
-  
+
   if (!this->init_csi_()) {
     ESP_LOGE(TAG, "CSI init failed");
     this->mark_failed();
     return;
   }
-  
+
   if (!this->init_isp_()) {
     ESP_LOGE(TAG, "ISP init failed");
     this->mark_failed();
     return;
   }
-  
+
+  // === Initialisation esp-video et encodeurs ===
+  ESP_LOGI(TAG, "Init esp-video virtual devices...");
+  esp_err_t ret = mipi_dsi_cam_video_init();
+  if (ret != ESP_OK) {
+    ESP_LOGE(TAG, "esp-video init failed: 0x%x", ret);
+    this->mark_failed();
+    return;
+  }
+
+  ESP_ERROR_CHECK(mipi_dsi_cam_create_jpeg_device(NULL));
+  ESP_ERROR_CHECK(mipi_dsi_cam_create_h264_device(true));
+
+  ESP_LOGI(TAG, "✅ esp-video pipeline ready:");
+  ESP_LOGI(TAG, "   /dev/video0 → RAW/RGB565 (Camera)");
+  ESP_LOGI(TAG, "   /dev/video1 → H.264 Encoder");
+  ESP_LOGI(TAG, "   /dev/video2 → JPEG Encoder");
+
   if (!this->allocate_buffer_()) {
     ESP_LOGE(TAG, "Buffer alloc failed");
     this->mark_failed();
     return;
   }
-  
+
   this->initialized_ = true;
+
+#ifdef MIPI_DSI_CAM_ENABLE_JPEG
+  this->jpeg_encoder_ = std::make_unique<MipiDsiCamJPEGEncoder>(this);
+  this->jpeg_encoder_->init(80);
+  ESP_LOGI(TAG, "✅ JPEG encoder initialized (quality=80)");
+#endif
+
+#ifdef MIPI_DSI_CAM_ENABLE_H264
+  this->h264_encoder_ = std::make_unique<MipiDsiCamH264Encoder>(this);
+  this->h264_encoder_->init(2000000, 30);
+  ESP_LOGI(TAG, "✅ H.264 encoder initialized (bitrate=2Mbps, GOP=30)");
+#endif
+
   if (this->enable_v4l2_on_setup_) {
     ESP_LOGI(TAG, "Auto-enabling V4L2 adapter...");
     this->enable_v4l2_adapter();
   }
-  
-  // Initialiser ISP Pipeline si demandé
+
   if (this->enable_isp_on_setup_) {
     ESP_LOGI(TAG, "Auto-enabling ISP pipeline...");
     this->enable_isp_pipeline();
