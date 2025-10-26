@@ -109,7 +109,15 @@ struct esp_video_ops {
 #define IOCTL_TYPE(cmd) (((cmd) >> 8) & 0xFF)
 #define IOCTL_NR(cmd)   ((cmd) & 0xFF)
 #define IOCTL_DIR(cmd)  (((cmd) >> 30) & 0x3)
-
+static const int VIDIOC_QUERYCAP_CMD  = static_cast<int>(0xc0505600u);
+static const int VIDIOC_G_FMT_CMD     = static_cast<int>(0xc0cc5604u);
+static const int VIDIOC_S_FMT_CMD     = static_cast<int>(0xc0cc5605u);
+static const int VIDIOC_REQBUFS_CMD   = static_cast<int>(0xc0145608u);
+static const int VIDIOC_QUERYBUF_CMD  = static_cast<int>(0xc0585609u);
+static const int VIDIOC_QBUF_CMD      = static_cast<int>(0xc058560fu);
+static const int VIDIOC_DQBUF_CMD     = static_cast<int>(0xc0585611u);
+static const int VIDIOC_STREAMON_CMD  = 0x40045612;
+static const int VIDIOC_STREAMOFF_CMD = 0x40045613;
 // Helper pour comparer les commandes ioctl
 static inline bool ioctl_match(int cmd, char type, int nr) {
     return (IOCTL_TYPE(cmd) == (unsigned char)type) && (IOCTL_NR(cmd) == nr);
