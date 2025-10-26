@@ -56,7 +56,7 @@ class LVGLCameraDisplay : public Component {
   size_t buffer_length_{0};
   int current_buffer_index_{-1};
 
-  
+  uint8_t *work_buffer_{nullptr};
   
   // PPA
   ppa_client_handle_t ppa_handle_{nullptr};
