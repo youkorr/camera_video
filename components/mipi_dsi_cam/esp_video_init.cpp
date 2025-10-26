@@ -2,7 +2,7 @@
 #include "esp_log.h"
 #include "esp_vfs.h"
 #include <fcntl.h>
-#include <sys/ioctl.h>
+#include "../lvgl_camera_display/ioctl.h"
 #include <errno.h>
 #include <cstring>
 
