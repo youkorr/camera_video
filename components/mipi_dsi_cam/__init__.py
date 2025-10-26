@@ -212,10 +212,10 @@ async def to_code(config):
     
     # Les initialiser automatiquement si demandé
     if enable_v4l2:
-        cg.add(var.enable_v4l2_adapter())
+        cg.add(var.set_enable_v4l2(True))
     
     if enable_isp:
-        cg.add(var.enable_isp_pipeline())
+        cg.add(var.set_enable_isp(True))
     
     if enable_jpeg:
         cg.add_define("MIPI_DSI_CAM_ENABLE_JPEG")
