@@ -8,7 +8,7 @@
 #include <fcntl.h>
 #include "ioctl.h"
 #include "mman.h"
-#include "../lvgl_camera_display/mman.h"
+//#include "../lvgl_camera_display/mman.h"
 #include "../mipi_dsi_cam/videodev2.h"
 #include "../mipi_dsi_cam/esp_video_device.h"
 #include "../mipi_dsi_cam/mipi_dsi_cam.h"
