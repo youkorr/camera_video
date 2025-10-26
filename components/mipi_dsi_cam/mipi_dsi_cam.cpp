@@ -371,8 +371,16 @@ bool IRAM_ATTR MipiDsiCam::on_csi_frame_done_(
 }
 
 bool MipiDsiCam::start_streaming() {
-  if (!this->initialized_ || this->streaming_) {
+  // ✅ FIX: Vérifier l'initialisation séparément
+  if (!this->initialized_) {
+    ESP_LOGE(TAG, "Cannot start streaming: camera not initialized");
     return false;
+  }
+  
+  // ✅ FIX: Si déjà en streaming, retourner SUCCÈS au lieu d'ÉCHEC
+  if (this->streaming_) {
+    ESP_LOGW(TAG, "Streaming already active");
+    return true;  // 🔥 CHANGEMENT CRITIQUE: true au lieu de false
   }
   
   ESP_LOGI(TAG, "Start streaming");
@@ -402,8 +410,11 @@ bool MipiDsiCam::start_streaming() {
 
 bool MipiDsiCam::stop_streaming() {
   if (!this->streaming_) {
+    ESP_LOGW(TAG, "Streaming already stopped");  // ✅ Log ajouté
     return true;
   }
+  
+  ESP_LOGI(TAG, "Stopping streaming...");  // ✅ Log amélioré
   
   esp_cam_ctlr_stop(this->csi_handle_);
   
