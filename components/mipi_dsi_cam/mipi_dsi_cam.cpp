@@ -16,7 +16,15 @@
 #ifdef USE_ESP32_VARIANT_ESP32P4
 
 #include "driver/ledc.h"
+
+// Inclure les encodeurs seulement si les macros sont définies
+#ifdef MIPI_DSI_CAM_ENABLE_JPEG
 #include "mipi_dsi_cam_encoders.h"
+#endif
+
+#ifdef MIPI_DSI_CAM_ENABLE_H264
+#include "mipi_dsi_cam_encoders.h"
+#endif
 
 namespace esphome {
 namespace mipi_dsi_cam {
@@ -100,20 +108,36 @@ void MipiDsiCam::setup() {
 
   this->initialized_ = true;
 
+  // Initialisation conditionnelle des encodeurs
 #ifdef MIPI_DSI_CAM_ENABLE_JPEG
   if (this->enable_jpeg_) {
+    ESP_LOGI(TAG, "Initializing JPEG encoder...");
     this->jpeg_encoder_ = std::make_unique<MipiDsiCamJPEGEncoder>(this);
-    this->jpeg_encoder_->init(80); // ou this->jpeg_quality_
+    if (this->jpeg_encoder_) {
+      this->jpeg_encoder_->init(this->jpeg_quality_);
+      ESP_LOGI(TAG, "✅ JPEG encoder initialized with quality: %u", this->jpeg_quality_);
+    }
+  } else {
+    ESP_LOGI(TAG, "JPEG encoder disabled");
   }
+#else
+  ESP_LOGI(TAG, "JPEG support not compiled in");
 #endif
 
-#ifdef MIPI_DSI_CAM_ENABLE_H264  
+#ifdef MIPI_DSI_CAM_ENABLE_H264
   if (this->enable_h264_) {
+    ESP_LOGI(TAG, "Initializing H.264 encoder...");
     this->h264_encoder_ = std::make_unique<MipiDsiCamH264Encoder>(this);
-    this->h264_encoder_->init(2000000, 30); // ou this->framerate_
+    if (this->h264_encoder_) {
+      this->h264_encoder_->init(2000000, this->framerate_);
+      ESP_LOGI(TAG, "✅ H.264 encoder initialized with framerate: %u", this->framerate_);
+    }
+  } else {
+    ESP_LOGI(TAG, "H.264 encoder disabled");
   }
+#else
+  ESP_LOGI(TAG, "H.264 support not compiled in");
 #endif
-
 
   if (this->enable_v4l2_on_setup_) {
     ESP_LOGI(TAG, "Auto-enabling V4L2 adapter...");
