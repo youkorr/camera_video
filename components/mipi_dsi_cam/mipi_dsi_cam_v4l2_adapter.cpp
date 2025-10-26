@@ -403,10 +403,11 @@ esp_err_t MipiDsiCamV4L2Adapter::v4l2_dqbuf(void *video, void *buffer) {
     // Capturer une nouvelle frame depuis la caméra
     if (!ctx->camera->capture_frame()) {
         // Pas de frame disponible - comportement non-bloquant
+        ESP_LOGV(TAG, "No frame available from camera");
         return ESP_FAIL;
     }
     
-    // Copier les données dans un buffer libre
+    // Copier les données dans un buffer queued
     uint8_t *camera_data = ctx->camera->get_image_data();
     size_t camera_size = ctx->camera->get_image_size();
     
@@ -415,10 +416,10 @@ esp_err_t MipiDsiCamV4L2Adapter::v4l2_dqbuf(void *video, void *buffer) {
         return ESP_FAIL;
     }
     
-    // Trouver un buffer libre
+    // Trouver un buffer QUEUED (owned by driver)
     struct esp_video_buffer_element *elem = nullptr;
     for (uint32_t i = 0; i < ctx->buffer_count; i++) {
-        if (ELEMENT_IS_FREE(&ctx->buffers->element[i])) {
+        if (!ELEMENT_IS_FREE(&ctx->buffers->element[i])) {  // ⚠️ CORRECTION : chercher un buffer ALLOCATED (queued)
             elem = &ctx->buffers->element[i];
             break;
         }
@@ -426,7 +427,7 @@ esp_err_t MipiDsiCamV4L2Adapter::v4l2_dqbuf(void *video, void *buffer) {
     
     if (!elem) {
         ctx->drop_count++;
-        ESP_LOGW(TAG, "⚠️  No free buffer (dropped frames: %u)", ctx->drop_count);
+        ESP_LOGV(TAG, "⚠️  No queued buffer available (dropped frames: %u)", ctx->drop_count);
         return ESP_FAIL;
     }
     
@@ -449,14 +450,15 @@ esp_err_t MipiDsiCamV4L2Adapter::v4l2_dqbuf(void *video, void *buffer) {
     // Timestamp
     gettimeofday(&buf->timestamp, nullptr);
     
-    ELEMENT_SET_ALLOCATED(elem);
+    // Marquer le buffer comme dequeued (owned by application)
+    ELEMENT_SET_FREE(elem);  // ⚠️ Le buffer est maintenant FREE (owned by app)
     if (ctx->queued_count > 0) {
         ctx->queued_count--;
     }
     ctx->frame_count++;
     
-    ESP_LOGV(TAG, "V4L2 dqbuf[%u]: %u bytes (frame %u)", 
-             elem->index, copy_size, ctx->frame_count);
+    ESP_LOGV(TAG, "V4L2 dqbuf[%u]: %u bytes (frame %u, queued: %u)", 
+             elem->index, copy_size, ctx->frame_count, ctx->queued_count);
     
     return ESP_OK;
 }
