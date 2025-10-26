@@ -411,6 +411,8 @@ bool LVGLCameraDisplay::transform_frame_(const uint8_t *src, uint8_t *dst) {
 
 #endif
 
+
+
 void LVGLCameraDisplay::loop() {
 #ifdef USE_ESP32_VARIANT_ESP32P4
   if (!this->v4l2_streaming_) {
@@ -450,14 +452,15 @@ void LVGLCameraDisplay::loop() {
     uint16_t canvas_height = (this->rotation_ == ROTATION_90 || this->rotation_ == ROTATION_270)
                              ? this->width_ : this->height_;
 
-    // CRITIQUE: Lock LVGL avant toute modification
-    lv_display_t *disp = lv_obj_get_display(this->canvas_obj_);
+    // CORRECTION LVGL v8: Utiliser l'API compatible
+    lv_disp_t *disp = lv_obj_get_disp(this->canvas_obj_);
     if (disp) {
-      _lv_display_refr_timer(NULL);  // Force un refresh
+      _lv_disp_refr_timer(NULL);  // Force un refresh
     }
 
+    // LVGL v8: Utiliser lv_canvas_set_buffer sans format explicite
     lv_canvas_set_buffer(this->canvas_obj_, display_buffer, 
-                         canvas_width, canvas_height, LV_COLOR_FORMAT_RGB565);
+                         canvas_width, canvas_height, LV_IMG_CF_TRUE_COLOR);
     lv_obj_invalidate(this->canvas_obj_);
   }
 
