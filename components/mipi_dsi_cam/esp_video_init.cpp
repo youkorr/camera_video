@@ -19,6 +19,26 @@ typedef struct {
 static esp_video_vfs_t s_video_devices[4] = {0};
 static bool s_vfs_registered = false;
 
+// ✅ FONCTION HELPER : Récupérer le contexte V4L2 depuis un fd
+extern "C" void* get_v4l2_context_from_fd(int fd) {
+    int device_num = fd - 100;
+    
+    if (device_num < 0 || device_num >= 4) {
+        ESP_LOGE(TAG, "Invalid fd for V4L2 context: %d", fd);
+        return nullptr;
+    }
+    
+    if (!s_video_devices[device_num].video_device) {
+        ESP_LOGE(TAG, "No video device registered for fd %d", fd);
+        return nullptr;
+    }
+    
+    ESP_LOGD(TAG, "Retrieved V4L2 context for fd %d -> %p", 
+             fd, s_video_devices[device_num].video_device);
+    
+    return s_video_devices[device_num].video_device;
+}
+
 // Forward declarations des opérations VFS
 static int video_open(const char *path, int flags, int mode);
 static int video_close(int fd);
@@ -109,15 +129,7 @@ struct esp_video_ops {
 #define IOCTL_TYPE(cmd) (((cmd) >> 8) & 0xFF)
 #define IOCTL_NR(cmd)   ((cmd) & 0xFF)
 #define IOCTL_DIR(cmd)  (((cmd) >> 30) & 0x3)
-static const int VIDIOC_QUERYCAP_CMD  = static_cast<int>(0xc0505600u);
-static const int VIDIOC_G_FMT_CMD     = static_cast<int>(0xc0cc5604u);
-static const int VIDIOC_S_FMT_CMD     = static_cast<int>(0xc0cc5605u);
-static const int VIDIOC_REQBUFS_CMD   = static_cast<int>(0xc0145608u);
-static const int VIDIOC_QUERYBUF_CMD  = static_cast<int>(0xc0585609u);
-static const int VIDIOC_QBUF_CMD      = static_cast<int>(0xc058560fu);
-static const int VIDIOC_DQBUF_CMD     = static_cast<int>(0xc0585611u);
-static const int VIDIOC_STREAMON_CMD  = 0x40045612;
-static const int VIDIOC_STREAMOFF_CMD = 0x40045613;
+
 // Helper pour comparer les commandes ioctl
 static inline bool ioctl_match(int cmd, char type, int nr) {
     return (IOCTL_TYPE(cmd) == (unsigned char)type) && (IOCTL_NR(cmd) == nr);
@@ -229,7 +241,7 @@ extern "C" esp_err_t esp_video_register_device(int device_id, void *video_device
     s_video_devices[device_id].ops = ops;
     s_video_devices[device_id].ref_count = 0;
     
-    ESP_LOGI(TAG, "✅ Registered /dev/video%d", device_id);
+    ESP_LOGI(TAG, "✅ Registered /dev/video%d (context: %p)", device_id, video_device);
     
     return ESP_OK;
 }
@@ -289,3 +301,4 @@ extern "C" esp_err_t esp_video_deinit(void)
     
     return ESP_OK;
 }
+
