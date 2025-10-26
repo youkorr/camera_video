@@ -2,6 +2,9 @@
 #include "esphome/core/log.h"
 #include "esphome/core/application.h"
 
+// ✅ Déclaration de la fonction externe (AVANT la classe)
+extern "C" void register_fd_to_device(int real_fd, int temp_fd);
+
 namespace esphome {
 namespace lvgl_camera_display {
 
@@ -99,7 +102,7 @@ void LVGLCameraDisplay::setup() {
 bool LVGLCameraDisplay::open_v4l2_device_() {
   ESP_LOGI(TAG, "Opening V4L2 device: %s", this->video_device_);
   
-  // Ouvrir le device video
+  // Ouvrir le device video (comme M5Stack: O_RDONLY)
   this->video_fd_ = open(this->video_device_, O_RDONLY);
   if (this->video_fd_ < 0) {
     ESP_LOGE(TAG, "Failed to open %s: errno=%d", this->video_device_, errno);
@@ -108,11 +111,10 @@ bool LVGLCameraDisplay::open_v4l2_device_() {
 
   ESP_LOGI(TAG, "✅ V4L2 device opened (fd=%d)", this->video_fd_);
   
-  // ✅ ENREGISTRER LE VRAI FD
-  // Le VFS a retourné un fd temporaire (1000+), on doit le mapper au vrai fd
-  extern "C" void register_fd_to_device(int real_fd, int temp_fd);
+  // ✅ ENREGISTRER LE VRAI FD dans la table de mapping
+  // Le VFS a retourné un fd temporaire (1000), on doit le mapper au vrai fd
   register_fd_to_device(this->video_fd_, 1000);  // 1000 = temp_fd pour video0
-  
+
   // Query capabilities
   struct v4l2_capability cap;
   if (ioctl(this->video_fd_, VIDIOC_QUERYCAP, &cap) < 0) {
