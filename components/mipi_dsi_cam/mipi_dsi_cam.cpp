@@ -79,10 +79,15 @@ void MipiDsiCam::setup() {
     return;
   }
   
-  this->initialized_ = true;
   if (this->enable_v4l2_on_setup_) {
-    ESP_LOGI(TAG, "Auto-enabling V4L2 adapter...");
+    ESP_LOGI(TAG, "🎬 Force-initializing V4L2 adapter...");
     this->enable_v4l2_adapter();
+    
+    if (this->v4l2_adapter_ && this->v4l2_adapter_->is_initialized()) {
+      ESP_LOGI(TAG, "✅ V4L2 ready for lvgl_camera_display");
+    } else {
+      ESP_LOGE(TAG, "❌ V4L2 initialization FAILED!");
+    }
   }
   
   // Initialiser ISP Pipeline si demandé
