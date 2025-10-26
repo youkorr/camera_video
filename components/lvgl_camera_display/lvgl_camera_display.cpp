@@ -108,6 +108,10 @@ bool LVGLCameraDisplay::open_v4l2_device_() {
 
   ESP_LOGI(TAG, "✅ V4L2 device opened (fd=%d)", this->video_fd_);
 
+    // ✅ ENREGISTRER LE MAPPING FD
+  extern void register_fd_to_device(int fd, int device_num);
+  register_fd_to_device(this->video_fd_, 0);  // device_num = 0 pour /dev/video0
+
   // Query capabilities
   struct v4l2_capability cap;
   if (ioctl(this->video_fd_, VIDIOC_QUERYCAP, &cap) < 0) {
