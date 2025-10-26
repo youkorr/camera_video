@@ -6,7 +6,8 @@
 #include "esphome/core/component.h"
 #include "esp_video_buffer.h"
 #include <fcntl.h>
-#include <sys/ioctl.h>
+//#include <sys/ioctl.h>
+#include ../lvgl_camera_display/ioctl.h"
 #include "videodev2.h"
 
 // Devices ESP32-P4
