@@ -13,6 +13,10 @@ extern "C" {
 
 #include <sys/time.h>
 #include <stdint.h>
+#include "types.h"
+#include "v4l2-common.h"
+#include "v4l2-controls.h"
+#include ../lvgl_camera_display/ioctl.h"
 
 /* ========== DÉFINITIONS DE TYPES ========== */
 #ifndef __u8
