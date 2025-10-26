@@ -42,6 +42,24 @@ typedef int64_t  __s64;
 #define v4l2_fourcc(a,b,c,d) ((__u32)(a) | ((__u32)(b)<<8) | ((__u32)(c)<<16) | ((__u32)(d)<<24))
 #define v4l2_fourcc_be(a,b,c,d) (v4l2_fourcc(a,b,c,d) | (1U<<31))
 
+/* ========== BUFFER FLAGS ========== */
+#define V4L2_BUF_FLAG_MAPPED         0x00000001
+#define V4L2_BUF_FLAG_QUEUED         0x00000002
+#define V4L2_BUF_FLAG_DONE           0x00000004
+#define V4L2_BUF_FLAG_KEYFRAME       0x00000008
+#define V4L2_BUF_FLAG_PFRAME         0x00000010
+#define V4L2_BUF_FLAG_BFRAME         0x00000020
+#define V4L2_BUF_FLAG_ERROR          0x00000040
+#define V4L2_BUF_FLAG_TIMESTAMP_MASK 0x0000e000
+
+/* ========== CAPABILITY FLAGS ========== */
+#define V4L2_CAP_VIDEO_CAPTURE      0x00000001
+#define V4L2_CAP_VIDEO_OUTPUT       0x00000002
+#define V4L2_CAP_VIDEO_OVERLAY      0x00000004
+#define V4L2_CAP_STREAMING          0x04000000
+#define V4L2_CAP_READWRITE          0x01000000
+#define V4L2_CAP_DEVICE_CAPS        0x80000000
+
 /* ========== ENUMÉRATIONS ========== */
 enum v4l2_field {
     V4L2_FIELD_ANY = 0,
@@ -158,6 +176,8 @@ struct v4l2_buffer {
 #define V4L2_PIX_FMT_YUV420  v4l2_fourcc('Y','U','1','2')
 #define V4L2_PIX_FMT_SBGGR8  v4l2_fourcc('B','A','8','1')
 #define V4L2_PIX_FMT_SBGGR10 v4l2_fourcc('B','G','1','0')
+#define V4L2_PIX_FMT_JPEG    v4l2_fourcc('J','P','E','G')
+#define V4L2_PIX_FMT_H264    v4l2_fourcc('H','2','6','4')
 
 /* ========== CONTROL TYPES ========== */
 #define V4L2_CTRL_TYPE_INTEGER      1
@@ -182,7 +202,18 @@ struct v4l2_buffer {
 #define V4L2_CID_RED_BALANCE        (V4L2_CID_BASE + 14)
 #define V4L2_CID_BLUE_BALANCE       (V4L2_CID_BASE + 15)
 
+/* JPEG & H264 control IDs */
+#define V4L2_CID_MPEG_BASE                     0x00990900
+#define V4L2_CID_MPEG_VIDEO_BITRATE            (V4L2_CID_MPEG_BASE + 207)
+#define V4L2_CID_MPEG_VIDEO_GOP_SIZE           (V4L2_CID_MPEG_BASE + 210)
+#define V4L2_CID_JPEG_COMPRESSION_QUALITY      (V4L2_CID_MPEG_BASE + 500)
+
 /* ========== EXT CONTROL STRUCTURES ========== */
+struct v4l2_control {
+    __u32 id;
+    __s32 value;
+};
+
 struct v4l2_ext_control {
     __u32 id;
     __u32 size;
@@ -234,6 +265,8 @@ struct v4l2_query_ext_ctrl {
 #define VIDIOC_S_FMT      _IOWR('V', 5, struct v4l2_format)
 #define VIDIOC_REQBUFS    _IOWR('V', 8, struct v4l2_requestbuffers)
 #define VIDIOC_QUERYBUF   _IOWR('V', 9, struct v4l2_buffer)
+#define VIDIOC_G_CTRL     _IOWR('V',27, struct v4l2_control)
+#define VIDIOC_S_CTRL     _IOWR('V',28, struct v4l2_control)
 #define VIDIOC_QBUF       _IOWR('V',15, struct v4l2_buffer)
 #define VIDIOC_DQBUF      _IOWR('V',17, struct v4l2_buffer)
 #define VIDIOC_STREAMON   _IOW ('V',18, int)
