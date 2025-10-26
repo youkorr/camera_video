@@ -397,35 +397,28 @@ esp_err_t MipiDsiCamV4L2Adapter::v4l2_dqbuf(void *video, void *buffer) {
     
     if (!ctx->buffers || !ctx->streaming) {
         ESP_LOGE(TAG, "❌ Not streaming or no buffers");
-        return ESP_ERR_INVALID_STATE;
-    }
-    
-    // Vérifier qu'il y a des buffers queued
-    if (ctx->queued_count == 0) {
-        ESP_LOGV(TAG, "No buffers queued");
-        return ESP_ERR_NOT_FOUND;  // Sera converti en EAGAIN par le VFS
+        return ESP_FAIL;
     }
     
     // Capturer une nouvelle frame depuis la caméra
     if (!ctx->camera->capture_frame()) {
         // Pas de frame disponible - comportement non-bloquant
-        ESP_LOGV(TAG, "No frame available from camera");
-        return ESP_ERR_NOT_FOUND;  // Sera converti en EAGAIN
+        return ESP_FAIL;
     }
     
-    // Copier les données dans un buffer queued
+    // Copier les données dans un buffer libre
     uint8_t *camera_data = ctx->camera->get_image_data();
     size_t camera_size = ctx->camera->get_image_size();
     
     if (!camera_data) {
         ESP_LOGE(TAG, "❌ No camera data available");
-        return ESP_ERR_INVALID_STATE;
+        return ESP_FAIL;
     }
     
-    // Trouver un buffer QUEUED (ALLOCATED = owned by driver)
+    // Trouver un buffer libre
     struct esp_video_buffer_element *elem = nullptr;
     for (uint32_t i = 0; i < ctx->buffer_count; i++) {
-        if (!ELEMENT_IS_FREE(&ctx->buffers->element[i])) {
+        if (ELEMENT_IS_FREE(&ctx->buffers->element[i])) {
             elem = &ctx->buffers->element[i];
             break;
         }
@@ -433,8 +426,8 @@ esp_err_t MipiDsiCamV4L2Adapter::v4l2_dqbuf(void *video, void *buffer) {
     
     if (!elem) {
         ctx->drop_count++;
-        ESP_LOGW(TAG, "⚠️  No queued buffer available (dropped frames: %u)", ctx->drop_count);
-        return ESP_ERR_NOT_FOUND;
+        ESP_LOGW(TAG, "⚠️  No free buffer (dropped frames: %u)", ctx->drop_count);
+        return ESP_FAIL;
     }
     
     // Copier les données
@@ -456,16 +449,14 @@ esp_err_t MipiDsiCamV4L2Adapter::v4l2_dqbuf(void *video, void *buffer) {
     // Timestamp
     gettimeofday(&buf->timestamp, nullptr);
     
-    // Marquer le buffer comme dequeued (owned by application)
-    ELEMENT_SET_FREE(elem);
+    ELEMENT_SET_ALLOCATED(elem);
     if (ctx->queued_count > 0) {
         ctx->queued_count--;
     }
     ctx->frame_count++;
     
-    ESP_LOGD(TAG, "V4L2 dqbuf[%u]: %u bytes (frame %u, queued: %u/%u)", 
-             elem->index, copy_size, ctx->frame_count, 
-             ctx->queued_count, ctx->buffer_count);
+    ESP_LOGV(TAG, "V4L2 dqbuf[%u]: %u bytes (frame %u)", 
+             elem->index, copy_size, ctx->frame_count);
     
     return ESP_OK;
 }
