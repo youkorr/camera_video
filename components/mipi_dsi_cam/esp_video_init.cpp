@@ -19,87 +19,33 @@ typedef struct {
 static esp_video_vfs_t s_video_devices[4] = {0};
 static bool s_vfs_registered = false;
 
-// ✅ TABLE DE MAPPING FD -> DEVICE_NUM
-#define MAX_FD_MAPPINGS 16
-static struct {
-    int fd;
-    int device_num;
-    bool is_temporary;  // Indique si c'est un fd temporaire à remplacer
-} s_fd_map[MAX_FD_MAPPINGS];
-static int s_fd_map_count = 0;
+// ✅ Contexte global pour le VFS (pointeur vers notre tableau de devices)
+static void *s_vfs_ctx = nullptr;
 
-// ✅ Déclarations forward des fonctions internes
-static void register_fd_mapping(int fd, int device_num, bool is_temporary);
-static int get_device_num_from_fd(int fd);
-static void unregister_fd_mapping(int fd);
-static void update_fd_mapping(int old_fd, int new_fd);
-
-// ✅ Fonctions de mapping
-static void register_fd_mapping(int fd, int device_num, bool is_temporary) {
-    if (s_fd_map_count < MAX_FD_MAPPINGS) {
-        s_fd_map[s_fd_map_count].fd = fd;
-        s_fd_map[s_fd_map_count].device_num = device_num;
-        s_fd_map[s_fd_map_count].is_temporary = is_temporary;
-        s_fd_map_count++;
-        ESP_LOGI(TAG, "✅ Registered fd=%d -> device_num=%d %s", 
-                 fd, device_num, is_temporary ? "(temporary)" : "");
+// ✅ FONCTION HELPER : Extraire device_num depuis un fd VFS
+// ESP-IDF encode le fd comme : (vfs_index << 12) | local_fd
+// On va utiliser local_fd comme device_num
+static int get_device_num_from_vfs_fd(int fd) {
+    // Le fd local est dans les 12 bits de poids faible
+    int local_fd = fd & 0xFFF;
+    
+    ESP_LOGD(TAG, "get_device_num_from_vfs_fd: fd=%d (0x%x) -> local_fd=%d", 
+             fd, fd, local_fd);
+    
+    // On a encodé device_num dans local_fd
+    if (local_fd >= 0 && local_fd < 4) {
+        return local_fd;
     }
-}
-
-static int get_device_num_from_fd(int fd) {
-    for (int i = 0; i < s_fd_map_count; i++) {
-        if (s_fd_map[i].fd == fd) {
-            return s_fd_map[i].device_num;
-        }
-    }
+    
     return -1;
-}
-
-static void unregister_fd_mapping(int fd) {
-    for (int i = 0; i < s_fd_map_count; i++) {
-        if (s_fd_map[i].fd == fd) {
-            // Décaler les éléments suivants
-            for (int j = i; j < s_fd_map_count - 1; j++) {
-                s_fd_map[j] = s_fd_map[j + 1];
-            }
-            s_fd_map_count--;
-            ESP_LOGI(TAG, "Unregistered fd=%d", fd);
-            return;
-        }
-    }
-}
-
-static void update_fd_mapping(int old_fd, int new_fd) {
-    for (int i = 0; i < s_fd_map_count; i++) {
-        if (s_fd_map[i].fd == old_fd && s_fd_map[i].is_temporary) {
-            ESP_LOGI(TAG, "Updating fd mapping: %d -> %d (device_num=%d)", 
-                     old_fd, new_fd, s_fd_map[i].device_num);
-            s_fd_map[i].fd = new_fd;
-            s_fd_map[i].is_temporary = false;
-            return;
-        }
-    }
-}
-
-// ✅ FONCTION PUBLIQUE pour enregistrer le vrai fd après open()
-extern "C" void register_fd_to_device(int real_fd, int temp_fd) {
-    ESP_LOGI(TAG, "register_fd_to_device: real_fd=%d, temp_fd=%d", real_fd, temp_fd);
-    update_fd_mapping(temp_fd, real_fd);
 }
 
 // ✅ FONCTION HELPER : Récupérer le contexte V4L2 depuis un fd
 extern "C" void* get_v4l2_context_from_fd(int fd) {
-    int device_num = get_device_num_from_fd(fd);
+    int device_num = get_device_num_from_vfs_fd(fd);
     
     if (device_num < 0 || device_num >= 4) {
-        ESP_LOGE(TAG, "❌ Invalid or unmapped fd: %d", fd);
-        // Afficher la table de mapping pour debug
-        ESP_LOGE(TAG, "Current fd mappings:");
-        for (int i = 0; i < s_fd_map_count; i++) {
-            ESP_LOGE(TAG, "  [%d] fd=%d -> device_num=%d %s", 
-                     i, s_fd_map[i].fd, s_fd_map[i].device_num,
-                     s_fd_map[i].is_temporary ? "(temp)" : "");
-        }
+        ESP_LOGE(TAG, "❌ Invalid or unmapped fd: %d (device_num=%d)", fd, device_num);
         return nullptr;
     }
     
@@ -145,19 +91,12 @@ static int video_open(const char *path, int flags, int mode) {
             if (s_video_devices[device_num].video_device) {
                 s_video_devices[device_num].ref_count++;
                 
-                // ✅ Créer un fd temporaire unique
-                // On utilise 1000 + device_num pour être sûr qu'il soit unique
-                int temp_fd = 1000 + device_num;
+                ESP_LOGI(TAG, "✅ Opening video%d -> returning fd=%d (refs=%d)", 
+                         device_num, device_num, s_video_devices[device_num].ref_count);
                 
-                // ✅ Enregistrer le mapping temporaire
-                register_fd_mapping(temp_fd, device_num, true);
-                
-                ESP_LOGI(TAG, "✅ Opening video%d (temp_fd=%d, refs=%d)", 
-                         device_num, temp_fd, s_video_devices[device_num].ref_count);
-                
-                // Retourner le fd temporaire
-                // Le VFS va le wrapper, mais on pourra le retrouver plus tard
-                return temp_fd;
+                // ✅ IMPORTANT: Retourner directement device_num
+                // Le VFS va l'encoder, mais on pourra le retrouver dans les 12 bits bas
+                return device_num;
             }
         }
     }
@@ -168,7 +107,7 @@ static int video_open(const char *path, int flags, int mode) {
 }
 
 static int video_close(int fd) {
-    int device_num = get_device_num_from_fd(fd);
+    int device_num = get_device_num_from_vfs_fd(fd);
     
     if (device_num >= 0 && device_num < 4) {
         if (s_video_devices[device_num].ref_count > 0) {
@@ -176,7 +115,6 @@ static int video_close(int fd) {
             ESP_LOGI(TAG, "Closed video%d (refs=%d)", 
                      device_num, s_video_devices[device_num].ref_count);
         }
-        unregister_fd_mapping(fd);
         return 0;
     }
     
@@ -212,23 +150,23 @@ struct esp_video_ops {
 
 #define IOCTL_TYPE(cmd) (((cmd) >> 8) & 0xFF)
 #define IOCTL_NR(cmd)   ((cmd) & 0xFF)
-#define IOCTL_DIR(cmd)  (((cmd) >> 30) & 0x3)
 
 static inline bool ioctl_match(int cmd, char type, int nr) {
     return (IOCTL_TYPE(cmd) == (unsigned char)type) && (IOCTL_NR(cmd) == nr);
 }
 
 static int video_ioctl(int fd, int cmd, va_list args) {
-    int device_num = get_device_num_from_fd(fd);
+    int device_num = get_device_num_from_vfs_fd(fd);
     
     if (device_num < 0 || device_num >= 4) {
-        ESP_LOGE(TAG, "❌ Invalid fd=%d (no device mapping)", fd);
+        ESP_LOGE(TAG, "❌ Invalid fd=%d (device_num=%d)", fd, device_num);
         errno = EBADF;
         return -1;
     }
     
     esp_video_vfs_t *vfs_dev = &s_video_devices[device_num];
     if (!vfs_dev->video_device) {
+        ESP_LOGE(TAG, "❌ No video device for device_num=%d", device_num);
         errno = ENODEV;
         return -1;
     }
@@ -236,8 +174,8 @@ static int video_ioctl(int fd, int cmd, va_list args) {
     const esp_video_ops *ops = (const esp_video_ops*)vfs_dev->ops;
     void *arg = va_arg(args, void*);
     
-    ESP_LOGV(TAG, "ioctl(fd=%d, cmd=0x%08x) on video%d - type='%c' nr=%d", 
-             fd, cmd, device_num, IOCTL_TYPE(cmd), IOCTL_NR(cmd));
+    ESP_LOGV(TAG, "ioctl(fd=%d, device_num=%d, cmd=0x%08x) - type='%c' nr=%d", 
+             fd, device_num, cmd, IOCTL_TYPE(cmd), IOCTL_NR(cmd));
     
     esp_err_t ret = ESP_OK;
     
@@ -308,7 +246,9 @@ extern "C" esp_err_t esp_video_register_device(int device_id, void *video_device
     
     if (!s_vfs_registered) {
         init_video_vfs();
-        esp_err_t ret = esp_vfs_register("/dev", &video_vfs, NULL);
+        // ✅ Passer le contexte (notre tableau de devices)
+        s_vfs_ctx = &s_video_devices;
+        esp_err_t ret = esp_vfs_register("/dev", &video_vfs, s_vfs_ctx);
         if (ret != ESP_OK && ret != ESP_ERR_INVALID_STATE) {
             ESP_LOGE(TAG, "Failed to register VFS: 0x%x", ret);
             return ret;
@@ -346,7 +286,8 @@ extern "C" esp_err_t esp_video_init(const esp_video_init_config_t *config)
 
     if (!s_vfs_registered) {
         init_video_vfs();
-        esp_err_t ret = esp_vfs_register("/dev", &video_vfs, NULL);
+        s_vfs_ctx = &s_video_devices;
+        esp_err_t ret = esp_vfs_register("/dev", &video_vfs, s_vfs_ctx);
         if (ret != ESP_OK && ret != ESP_ERR_INVALID_STATE) {
             ESP_LOGE(TAG, "Failed to register video VFS: 0x%x", ret);
             return ret;
@@ -370,8 +311,6 @@ extern "C" esp_err_t esp_video_deinit(void)
         s_video_devices[i].ops = NULL;
         s_video_devices[i].ref_count = 0;
     }
-    
-    s_fd_map_count = 0;
     
     if (s_vfs_registered) {
         esp_vfs_unregister("/dev");
