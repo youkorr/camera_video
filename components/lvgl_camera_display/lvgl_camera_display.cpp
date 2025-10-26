@@ -237,17 +237,18 @@ bool LVGLCameraDisplay::setup_v4l2_buffers_() {
     ESP_LOGD(TAG, "Buffer %u: mapped at %p, length=%u, offset=%u",
              i, this->mmap_buffers_[i], buf.length, buf.m.offset);
 
-    // Queue le buffer
+    // ⚠️ IMPORTANT : Queue le buffer AVANT de démarrer le streaming
     if (ioctl(this->video_fd_, VIDIOC_QBUF, &buf) < 0) {
-      ESP_LOGE(TAG, "VIDIOC_QBUF failed for buffer %u", i);
+      ESP_LOGE(TAG, "VIDIOC_QBUF failed for buffer %u: errno=%d", i, errno);
       return false;
     }
+    
+    ESP_LOGD(TAG, "Buffer %u queued", i);
   }
 
-  ESP_LOGI(TAG, "✅ V4L2 buffers ready");
+  ESP_LOGI(TAG, "✅ V4L2 buffers ready (all %u buffers queued)", req.count);
   return true;
 }
-
 bool LVGLCameraDisplay::start_v4l2_streaming_() {
   ESP_LOGI(TAG, "Starting V4L2 streaming...");
 
