@@ -21,7 +21,7 @@ namespace esphome {
 namespace lvgl_camera_display {
 
 // Configuration
-#define VIDEO_BUFFER_COUNT 1  // Triple buffering
+#define VIDEO_BUFFER_COUNT 2  // Triple buffering
 #define MEMORY_TYPE V4L2_MEMORY_MMAP
 
 enum Rotation {
