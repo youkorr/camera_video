@@ -76,6 +76,10 @@ class MipiDsiCam : public Component, public i2c::I2CDevice {
   void set_jpeg_quality(uint8_t quality) { this->jpeg_quality_ = quality; }
   void set_framerate(uint8_t fps) { this->framerate_ = fps; }
 
+  // NOUVEAUX setters pour activer V4L2/ISP au démarrage
+  void set_enable_v4l2(bool enable) { this->enable_v4l2_on_setup_ = enable; }
+  void set_enable_isp(bool enable) { this->enable_isp_on_setup_ = enable; }
+
   bool capture_frame();
   bool start_streaming();
   bool stop_streaming();
@@ -127,6 +131,10 @@ class MipiDsiCam : public Component, public i2c::I2CDevice {
   bool initialized_{false};
   bool streaming_{false};
   bool frame_ready_{false};
+  
+  // Flags pour activer V4L2/ISP au démarrage
+  bool enable_v4l2_on_setup_{false};
+  bool enable_isp_on_setup_{false};
   
   uint32_t total_frames_received_{0};
   uint32_t last_frame_log_time_{0};
