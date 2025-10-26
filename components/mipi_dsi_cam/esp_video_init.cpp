@@ -43,9 +43,10 @@ static void init_video_vfs() {
 static int video_open(const char *path, int flags, int mode) {
     ESP_LOGI(TAG, "VFS open: %s (flags=0x%x)", path, flags);
     
-    // Extraire le numéro de device depuis /dev/videoN
+    // CORRECTION: Extraire le numéro de device depuis /videoN 
+    // (le VFS a déjà retiré le préfixe /dev)
     int device_num = -1;
-    if (sscanf(path, "/dev/video%d", &device_num) == 1) {
+    if (sscanf(path, "/video%d", &device_num) == 1) {
         if (device_num >= 0 && device_num < 4) {
             if (s_video_devices[device_num].video_device) {
                 s_video_devices[device_num].ref_count++;
