@@ -444,7 +444,7 @@ void LVGLCameraDisplay::loop() {
   }
   this->last_update_time_ = now;
 
-  // Capturer une frame via V4L2 (comme M5Stack)
+  // Capturer une frame via V4L2
   uint8_t *frame_data = nullptr;
   if (!this->capture_v4l2_frame_(&frame_data)) {
     this->drop_count_++;
@@ -464,7 +464,34 @@ void LVGLCameraDisplay::loop() {
     }
   }
 
-  // Afficher sur le canvas LVGL (comme M5Stack)
+  // ⚠️ CRITIQUE: Copier les données AVANT de libérer le buffer
+  // Si pas de PPA, on doit copier dans un buffer temporaire
+  if (display_buffer == frame_data && this->canvas_obj_) {
+    // Copier les données car on va libérer le buffer V4L2 immédiatement
+    uint16_t canvas_width = (this->rotation_ == ROTATION_90 || this->rotation_ == ROTATION_270)
+                            ? this->height_ : this->width_;
+    uint16_t canvas_height = (this->rotation_ == ROTATION_90 || this->rotation_ == ROTATION_270)
+                             ? this->width_ : this->height_;
+    
+    size_t buffer_size = canvas_width * canvas_height * 2;
+    
+    // Allouer un buffer de travail si nécessaire
+    if (!this->work_buffer_) {
+      this->work_buffer_ = (uint8_t*)heap_caps_aligned_alloc(
+        64, buffer_size, MALLOC_CAP_SPIRAM
+      );
+    }
+    
+    if (this->work_buffer_) {
+      memcpy(this->work_buffer_, frame_data, buffer_size);
+      display_buffer = this->work_buffer_;
+    }
+  }
+
+  // ✅ LIBÉRER LE BUFFER V4L2 IMMÉDIATEMENT
+  this->release_v4l2_frame_();
+
+  // Afficher sur le canvas LVGL
   if (this->canvas_obj_) {
     uint16_t canvas_width = (this->rotation_ == ROTATION_90 || this->rotation_ == ROTATION_270)
                             ? this->height_ : this->width_;
@@ -480,9 +507,6 @@ void LVGLCameraDisplay::loop() {
                          canvas_width, canvas_height, LV_IMG_CF_TRUE_COLOR);
     lv_obj_invalidate(this->canvas_obj_);
   }
-
-  // Libérer le buffer V4L2
-  this->release_v4l2_frame_();
 
   this->frame_count_++;
 
