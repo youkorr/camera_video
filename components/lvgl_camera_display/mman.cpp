@@ -7,7 +7,7 @@
 #include <cstring>  // Pour memset
 #include "esp_log.h"
 #include "esp_heap_caps.h"  // Pour heap_caps_aligned_alloc et les MALLOC_CAP_*
-
+#include "../mipi_dsi_cam/mipi_dsi_cam_v4l2_adapter.h"
 static const char *TAG = "mman";
 
 // Table simple de mapping pour ESP32-P4
