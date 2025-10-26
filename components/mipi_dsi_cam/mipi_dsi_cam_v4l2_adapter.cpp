@@ -430,7 +430,7 @@ esp_err_t MipiDsiCamV4L2Adapter::v4l2_dqbuf(void *video, void *buffer) {
     }
     
     // Copier les données
-    size_t copy_size = std::min(camera_size, ctx->buffers->info.size);
+    size_t copy_size = std::min(camera_size, static_cast<size_t>(ctx->buffers->info.size));
     memcpy(elem->buffer, camera_data, copy_size);
     elem->valid_size = copy_size;
     
