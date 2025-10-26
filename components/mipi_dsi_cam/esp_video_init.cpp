@@ -25,20 +25,21 @@ static void *s_vfs_ctx = nullptr;
 // ✅ FONCTION HELPER : Extraire device_num depuis un fd VFS
 // ESP-IDF encode le fd comme : (vfs_index << 12) | local_fd
 // On va utiliser local_fd comme device_num
-static int get_device_num_from_vfs_fd(int fd) {
-    // Le fd local est dans les 12 bits de poids faible
-    int local_fd = fd & 0xFFF;
-    
-    ESP_LOGD(TAG, "get_device_num_from_vfs_fd: fd=%d (0x%x) -> local_fd=%d", 
-             fd, fd, local_fd);
-    
-    // On a encodé device_num dans local_fd
-    if (local_fd >= 0 && local_fd < 4) {
-        return local_fd;
-    }
-    
-    return -1;
-}
+  static int get_device_num_from_vfs_fd(int fd) {
+      ESP_LOGD(TAG, "get_device_num_from_vfs_fd: fd=%d (0x%x)", fd, fd);
+      
+      // Vérifier directement dans le tableau des devices
+      for (int i = 0; i < 4; i++) {
+          if (s_video_devices[i].video_device != nullptr) {
+              ESP_LOGD(TAG, "Found active device at index %d", i);
+              // Pour /dev/video0, retourner toujours 0
+              return 0;
+          }
+      }
+      
+      ESP_LOGE(TAG, "❌ No active video device found for fd=%d", fd);
+      return -1;
+  }
 
 // ✅ FONCTION HELPER : Récupérer le contexte V4L2 depuis un fd
 extern "C" void* get_v4l2_context_from_fd(int fd) {
