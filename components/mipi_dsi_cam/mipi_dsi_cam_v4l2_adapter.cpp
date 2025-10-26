@@ -384,6 +384,19 @@ esp_err_t MipiDsiCamV4L2Adapter::v4l2_qbuf(void *video, void *buffer) {
     
     // Marquer le buffer comme prêt à recevoir des données
     ELEMENT_SET_FREE(elem);
+    // Marquer le buffer comme possédé par le driver (en attente de capture)
+    ELEMENT_SET_ALLOCATED(elem);
+    elem->valid_size = 0;
+    ctx->queued_count++;
+    
+    ESP_LOGV(TAG, "V4L2 qbuf[%u] (queued: %u/%u)", 
+             buf->index, ctx->queued_count, ctx->buffer_count);
+    
+    return ESP_OK;
+}
+    
+    // Marquer le buffer comme prêt à recevoir des données
+    ELEMENT_SET_FREE(elem);
     ctx->queued_count++;
     
     ESP_LOGV(TAG, "V4L2 qbuf[%u] (queued: %u/%u)", 
