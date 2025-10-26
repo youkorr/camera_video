@@ -105,17 +105,15 @@ struct esp_video_ops {
     esp_err_t (*querycap)(void *video, void *cap);
 };
 
-// Définir les constantes ioctl correctement pour éviter les erreurs de narrowing
-// Utiliser des valeurs signées explicites
-static const int VIDIOC_QUERYCAP_CMD  = static_cast<int>(0xc0505600u);
-static const int VIDIOC_G_FMT_CMD     = static_cast<int>(0xc0cc5604u);
-static const int VIDIOC_S_FMT_CMD     = static_cast<int>(0xc0cc5605u);
-static const int VIDIOC_REQBUFS_CMD   = static_cast<int>(0xc0145608u);
-static const int VIDIOC_QUERYBUF_CMD  = static_cast<int>(0xc0585609u);
-static const int VIDIOC_QBUF_CMD      = static_cast<int>(0xc058560fu);
-static const int VIDIOC_DQBUF_CMD     = static_cast<int>(0xc0585611u);
-static const int VIDIOC_STREAMON_CMD  = 0x40045612;
-static const int VIDIOC_STREAMOFF_CMD = 0x40045613;
+// Extraire les composants de la commande ioctl
+#define IOCTL_TYPE(cmd) (((cmd) >> 8) & 0xFF)
+#define IOCTL_NR(cmd)   ((cmd) & 0xFF)
+#define IOCTL_DIR(cmd)  (((cmd) >> 30) & 0x3)
+
+// Helper pour comparer les commandes ioctl
+static inline bool ioctl_match(int cmd, char type, int nr) {
+    return (IOCTL_TYPE(cmd) == (unsigned char)type) && (IOCTL_NR(cmd) == nr);
+}
 
 static int video_ioctl(int fd, int cmd, va_list args) {
     int device_num = fd - 100;
@@ -134,55 +132,64 @@ static int video_ioctl(int fd, int cmd, va_list args) {
     const esp_video_ops *ops = (const esp_video_ops*)vfs_dev->ops;
     void *arg = va_arg(args, void*);
     
-    ESP_LOGV(TAG, "ioctl(fd=%d, cmd=0x%x) on video%d", fd, cmd, device_num);
+    ESP_LOGD(TAG, "ioctl(fd=%d, cmd=0x%08x) on video%d - type='%c' nr=%d", 
+             fd, cmd, device_num, IOCTL_TYPE(cmd), IOCTL_NR(cmd));
     
     // Router les commandes V4L2 vers les opérations appropriées
     esp_err_t ret = ESP_OK;
     
-    if (cmd == VIDIOC_QUERYCAP_CMD) {
+    if (ioctl_match(cmd, 'V', 0)) {  // VIDIOC_QUERYCAP
         if (ops && ops->querycap) {
             ret = ops->querycap(vfs_dev->video_device, arg);
         }
-    } else if (cmd == VIDIOC_G_FMT_CMD) {
+    } else if (ioctl_match(cmd, 'V', 4)) {  // VIDIOC_G_FMT
         if (ops && ops->get_format) {
             ret = ops->get_format(vfs_dev->video_device, arg);
         }
-    } else if (cmd == VIDIOC_S_FMT_CMD) {
+    } else if (ioctl_match(cmd, 'V', 5)) {  // VIDIOC_S_FMT
         if (ops && ops->set_format) {
             ret = ops->set_format(vfs_dev->video_device, arg);
         }
-    } else if (cmd == VIDIOC_REQBUFS_CMD) {
+    } else if (ioctl_match(cmd, 'V', 8)) {  // VIDIOC_REQBUFS
         if (ops && ops->reqbufs) {
             ret = ops->reqbufs(vfs_dev->video_device, arg);
         }
-    } else if (cmd == VIDIOC_QUERYBUF_CMD) {
+    } else if (ioctl_match(cmd, 'V', 9)) {  // VIDIOC_QUERYBUF
         if (ops && ops->querybuf) {
             ret = ops->querybuf(vfs_dev->video_device, arg);
         }
-    } else if (cmd == VIDIOC_QBUF_CMD) {
+    } else if (ioctl_match(cmd, 'V', 15)) {  // VIDIOC_QBUF
         if (ops && ops->qbuf) {
             ret = ops->qbuf(vfs_dev->video_device, arg);
         }
-    } else if (cmd == VIDIOC_DQBUF_CMD) {
+    } else if (ioctl_match(cmd, 'V', 17)) {  // VIDIOC_DQBUF
         if (ops && ops->dqbuf) {
             ret = ops->dqbuf(vfs_dev->video_device, arg);
         }
-    } else if (cmd == VIDIOC_STREAMON_CMD) {
+    } else if (ioctl_match(cmd, 'V', 18)) {  // VIDIOC_STREAMON
         if (ops && ops->start) {
             uint32_t type = *(uint32_t*)arg;
             ret = ops->start(vfs_dev->video_device, type);
         }
-    } else if (cmd == VIDIOC_STREAMOFF_CMD) {
+    } else if (ioctl_match(cmd, 'V', 19)) {  // VIDIOC_STREAMOFF
         if (ops && ops->stop) {
             uint32_t type = *(uint32_t*)arg;
             ret = ops->stop(vfs_dev->video_device, type);
         }
+    } else if (ioctl_match(cmd, 'V', 27)) {  // VIDIOC_G_CTRL
+        ESP_LOGD(TAG, "VIDIOC_G_CTRL - not implemented");
+        return 0;
+    } else if (ioctl_match(cmd, 'V', 28)) {  // VIDIOC_S_CTRL
+        ESP_LOGD(TAG, "VIDIOC_S_CTRL - not implemented");
+        return 0;
     } else {
-        ESP_LOGW(TAG, "Unhandled ioctl 0x%x", cmd);
+        ESP_LOGW(TAG, "Unhandled ioctl cmd=0x%08x type='%c' nr=%d", 
+                 cmd, IOCTL_TYPE(cmd), IOCTL_NR(cmd));
         return 0;  // Succès par défaut pour les commandes non implémentées
     }
     
     if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "ioctl operation failed: 0x%x", ret);
         errno = EIO;
         return -1;
     }
