@@ -80,8 +80,20 @@ void MipiDsiCam::setup() {
   }
   
   this->initialized_ = true;
+  if (this->enable_v4l2_on_setup_) {
+    ESP_LOGI(TAG, "Auto-enabling V4L2 adapter...");
+    this->enable_v4l2_adapter();
+  }
+  
+  // Initialiser ISP Pipeline si demandé
+  if (this->enable_isp_on_setup_) {
+    ESP_LOGI(TAG, "Auto-enabling ISP pipeline...");
+    this->enable_isp_pipeline();
+  }
+  
   ESP_LOGI(TAG, "Camera ready (%ux%u) with Auto Exposure", this->width_, this->height_);
 }
+
 
 bool MipiDsiCam::create_sensor_driver_() {
   ESP_LOGI(TAG, "Creating driver for: %s", this->sensor_type_.c_str());
