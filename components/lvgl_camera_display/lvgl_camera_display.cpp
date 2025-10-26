@@ -319,6 +319,12 @@ void LVGLCameraDisplay::cleanup_v4l2_() {
       this->mmap_buffers_[i] = nullptr;
     }
   }
+  
+  // Libérer le buffer de travail
+  if (this->work_buffer_) {
+    heap_caps_free(this->work_buffer_);
+    this->work_buffer_ = nullptr;
+  }
 
   if (this->video_fd_ >= 0) {
     close(this->video_fd_);
