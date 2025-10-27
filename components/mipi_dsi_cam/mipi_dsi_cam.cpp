@@ -12,6 +12,17 @@
 #include "mipi_dsi_cam_isp_pipeline.h"
 #endif
 
+#ifdef MIPI_DSI_CAM_ENABLE_JPEG
+#include "mipi_dsi_cam_encoders.h"
+#endif
+
+#ifdef MIPI_DSI_CAM_ENABLE_H264
+// H264 inclus dans le même fichier que JPEG
+#ifndef MIPI_DSI_CAM_ENABLE_JPEG
+#include "mipi_dsi_cam_encoders.h"
+#endif
+#endif
+
 #ifdef USE_ESP32_VARIANT_ESP32P4
 
 #include "driver/ledc.h"
@@ -80,6 +91,8 @@ void MipiDsiCam::setup() {
   }
   
   this->initialized_ = true;
+  
+  // Initialiser V4L2 adapter si demandé
   if (this->enable_v4l2_on_setup_) {
     ESP_LOGI(TAG, "Auto-enabling V4L2 adapter...");
     this->enable_v4l2_adapter();
@@ -89,6 +102,18 @@ void MipiDsiCam::setup() {
   if (this->enable_isp_on_setup_) {
     ESP_LOGI(TAG, "Auto-enabling ISP pipeline...");
     this->enable_isp_pipeline();
+  }
+  
+  // Initialiser JPEG encoder si demandé
+  if (this->enable_jpeg_on_setup_) {
+    ESP_LOGI(TAG, "Auto-enabling JPEG encoder...");
+    this->enable_jpeg_encoder();
+  }
+  
+  // Initialiser H264 encoder si demandé
+  if (this->enable_h264_on_setup_) {
+    ESP_LOGI(TAG, "Auto-enabling H264 encoder...");
+    this->enable_h264_encoder();
   }
   
   ESP_LOGI(TAG, "Camera ready (%ux%u) with Auto Exposure", this->width_, this->height_);
@@ -378,6 +403,7 @@ bool MipiDsiCam::start_streaming() {
   ESP_LOGI(TAG, "Start streaming");
   
   this->total_frames_received_ = 0;
+  this->drop_count_ = 0;
   this->last_frame_log_time_ = millis();
   
   if (this->sensor_driver_) {
@@ -426,6 +452,8 @@ bool MipiDsiCam::capture_frame() {
     this->frame_ready_ = false;
     uint8_t last_buffer = (this->buffer_index_ + 1) % 2;
     this->current_frame_buffer_ = this->frame_buffers_[last_buffer];
+  } else {
+    this->drop_count_++;
   }
   
   return was_ready;
@@ -508,27 +536,17 @@ void MipiDsiCam::loop() {
     // Mise à jour Auto Exposure
     this->update_auto_exposure_();
     
-    static uint32_t ready_count = 0;
-    static uint32_t not_ready_count = 0;
-    
-    if (this->frame_ready_) {
-      ready_count++;
-    } else {
-      not_ready_count++;
-    }
-    
     uint32_t now = millis();
-    if (now - this->last_frame_log_time_ >= 3000) {
-      float sensor_fps = this->total_frames_received_ / 3.0f;
-      float ready_rate = (float)ready_count / (float)(ready_count + not_ready_count) * 100.0f;
+    // Log toutes les 10 secondes au lieu de 3
+    if (now - this->last_frame_log_time_ >= 10000) {
+      float sensor_fps = this->total_frames_received_ / 10.0f;
       
-      ESP_LOGI(TAG, "📸 FPS: %.1f | frame_ready: %.1f%% | exp:0x%04X gain:%u", 
-               sensor_fps, ready_rate, this->current_exposure_, this->current_gain_index_);
+      ESP_LOGI(TAG, "📸 Sensor: %.1f FPS | Drops: %u | exp:0x%04X gain:%u", 
+               sensor_fps, this->drop_count_, this->current_exposure_, this->current_gain_index_);
       
       this->total_frames_received_ = 0;
+      this->drop_count_ = 0;
       this->last_frame_log_time_ = now;
-      ready_count = 0;
-      not_ready_count = 0;
     }
   }
 }
@@ -683,6 +701,52 @@ void MipiDsiCam::enable_isp_pipeline() {
   } else {
     ESP_LOGI(TAG, "✅ ISP pipeline enabled");
   }
+}
+
+#ifdef MIPI_DSI_CAM_ENABLE_JPEG
+void MipiDsiCam::enable_jpeg_encoder(uint8_t quality) {
+  if (this->jpeg_encoder_ != nullptr) {
+    ESP_LOGW(TAG, "JPEG encoder already enabled");
+    return;
+  }
+  
+  ESP_LOGI(TAG, "Enabling JPEG encoder (quality=%u)...", quality);
+  this->jpeg_encoder_ = new MipiDsiCamJPEGEncoder(this);
+  
+  esp_err_t ret = this->jpeg_encoder_->init(quality);
+  if (ret != ESP_OK) {
+    ESP_LOGE(TAG, "Failed to initialize JPEG encoder: 0x%x", ret);
+    delete this->jpeg_encoder_;
+    this->jpeg_encoder_ = nullptr;
+  } else {
+    ESP_LOGI(TAG, "✅ JPEG encoder enabled");
+  }
+}
+#endif
+
+#ifdef MIPI_DSI_CAM_ENABLE_H264
+void MipiDsiCam::enable_h264_encoder(uint32_t bitrate, uint32_t gop_size) {
+  if (this->h264_encoder_ != nullptr) {
+    ESP_LOGW(TAG, "H264 encoder already enabled");
+    return;
+  }
+  
+  ESP_LOGI(TAG, "Enabling H264 encoder (bitrate=%u, gop=%u)...", bitrate, gop_size);
+  this->h264_encoder_ = new MipiDsiCamH264Encoder(this);
+  
+  esp_err_t ret = this->h264_encoder_->init(bitrate, gop_size);
+  if (ret != ESP_OK) {
+    ESP_LOGE(TAG, "Failed to initialize H264 encoder: 0x%x", ret);
+    delete this->h264_encoder_;
+    this->h264_encoder_ = nullptr;
+  } else {
+    ESP_LOGI(TAG, "✅ H264 encoder enabled");
+  }
+}
+#endif
+
+uint8_t MipiDsiCam::get_fps() const { 
+  return this->framerate_; 
 }
 
 }  // namespace mipi_dsi_cam
