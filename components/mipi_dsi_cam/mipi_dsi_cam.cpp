@@ -494,10 +494,6 @@ void MipiDsiCam::update_auto_exposure_() {
     
     this->sensor_driver_->set_exposure(this->current_exposure_);
     this->sensor_driver_->set_gain(this->current_gain_index_);
-    
-    ESP_LOGV(TAG, "🔆 AE: brightness=%u target=%u → exp=0x%04X gain=%u",
-             avg_brightness, this->ae_target_brightness_,
-             this->current_exposure_, this->current_gain_index_);
   }
 }
 
@@ -703,8 +699,9 @@ void MipiDsiCam::enable_isp_pipeline() {
   }
 }
 
-#ifdef MIPI_DSI_CAM_ENABLE_JPEG
+// ✅ Méthodes toujours présentes, mais ne font rien si les encodeurs ne sont pas compilés
 void MipiDsiCam::enable_jpeg_encoder(uint8_t quality) {
+#ifdef MIPI_DSI_CAM_ENABLE_JPEG
   if (this->jpeg_encoder_ != nullptr) {
     ESP_LOGW(TAG, "JPEG encoder already enabled");
     return;
@@ -721,11 +718,13 @@ void MipiDsiCam::enable_jpeg_encoder(uint8_t quality) {
   } else {
     ESP_LOGI(TAG, "✅ JPEG encoder enabled");
   }
-}
+#else
+  ESP_LOGW(TAG, "JPEG encoder not compiled - enable in YAML config");
 #endif
+}
 
-#ifdef MIPI_DSI_CAM_ENABLE_H264
 void MipiDsiCam::enable_h264_encoder(uint32_t bitrate, uint32_t gop_size) {
+#ifdef MIPI_DSI_CAM_ENABLE_H264
   if (this->h264_encoder_ != nullptr) {
     ESP_LOGW(TAG, "H264 encoder already enabled");
     return;
@@ -742,8 +741,10 @@ void MipiDsiCam::enable_h264_encoder(uint32_t bitrate, uint32_t gop_size) {
   } else {
     ESP_LOGI(TAG, "✅ H264 encoder enabled");
   }
-}
+#else
+  ESP_LOGW(TAG, "H264 encoder not compiled - enable in YAML config");
 #endif
+}
 
 uint8_t MipiDsiCam::get_fps() const { 
   return this->framerate_; 
