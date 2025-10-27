@@ -179,7 +179,17 @@ async def to_code(config):
         width = sensor_info['width']
         height = sensor_info['height']
         resolution_source = "native"
+
+    if enable_h264:
+        cg.add_define("MIPI_DSI_CAM_ENABLE_H264")
     
+    # ✅ AJOUTER CES LIGNES
+    # Activer automatiquement les encodeurs
+    if enable_jpeg:
+        cg.add(var.set_enable_jpeg(True))
+    
+    if enable_h264:
+        cg.add(var.set_enable_h264(True))
     # Paramètres du capteur
     lane_count = config.get(CONF_LANE, sensor_info['lane_count'])
     sensor_address = config.get(CONF_ADDRESS_SENSOR, sensor_info['i2c_address'])
