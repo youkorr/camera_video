@@ -2,7 +2,7 @@
 
 #include "mipi_dsi_cam.h"
 #include "esp_video_buffer.h"
-
+#include "esp_video_init.h"
 #ifdef USE_ESP32_VARIANT_ESP32P4
 
 extern "C" {
