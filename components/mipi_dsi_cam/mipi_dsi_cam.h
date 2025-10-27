@@ -93,7 +93,11 @@ public:
   bool is_initialized() const { return this->initialized_; }
   bool has_external_clock() const { return this->external_clock_pin_ >= 0; }
   
-  // ✅ NOUVEAU : Gestion de la séquence de frames
+  // ✅ NOUVEAU : Getter pour l'adaptateur V4L2
+  MipiDsiCamV4L2Adapter* get_v4l2_adapter() const { return this->v4l2_adapter_; }
+  MipiDsiCamISPPipeline* get_isp_pipeline() const { return this->isp_pipeline_; }
+  
+  // Gestion de la séquence de frames
   uint32_t get_frame_sequence() const { return this->frame_sequence_; }
   uint32_t get_current_sequence() const { return this->locked_sequence_; }
   
@@ -101,7 +105,7 @@ public:
   bool start_streaming();
   bool stop_streaming();
   
-  // ✅ CORRIGÉ : Nouvelle API de gestion des frames avec verrouillage
+  // Nouvelle API de gestion des frames avec verrouillage
   bool acquire_frame(uint32_t last_served_sequence);
   void release_frame();
   
@@ -122,17 +126,7 @@ public:
   
   // Balance des blancs
   void set_auto_white_balance(bool enable);
-  void set_white_balance_gains(float red, float green, float blue, bool update_fixed = true) {
-    this->wb_red_gain_ = red;
-    this->wb_green_gain_ = green;
-    this->wb_blue_gain_ = blue;
-    
-    if (update_fixed) {
-      this->wb_red_gain_fixed_ = static_cast<uint16_t>(red * 256.0f);
-      this->wb_green_gain_fixed_ = static_cast<uint16_t>(green * 256.0f);
-      this->wb_blue_gain_fixed_ = static_cast<uint16_t>(blue * 256.0f);
-    }
-  }
+  void set_white_balance_gains(float red, float green, float blue);
   
   // Activer les adaptateurs
   void enable_v4l2_adapter();
@@ -160,11 +154,11 @@ protected:
   bool initialized_{false};
   bool streaming_{false};
   
-  // ✅ NOUVEAU : Système de verrouillage de frames
+  // Système de verrouillage de frames
   bool frame_ready_{false};
   bool frame_locked_{false};
-  uint32_t frame_sequence_{0};      // Séquence globale (incrémentée à chaque frame CSI)
-  uint32_t locked_sequence_{0};     // Séquence de la frame actuellement verrouillée
+  uint32_t frame_sequence_{0};
+  uint32_t locked_sequence_{0};
   
   // Buffers
   uint8_t *frame_buffers_[2]{nullptr, nullptr};
