@@ -34,13 +34,13 @@ struct MipiCameraV4L2Context {
   uint32_t buffer_count;
   uint32_t queued_count;
   
-  // ✅ NOUVEAU : Système de séquence
+  // ✅ NOUVEAU : Système de séquence pour éviter les duplicatas
   uint32_t last_frame_sequence;  // Dernière séquence servie à l'application
   
   // Statistiques
   uint32_t frame_count;
   uint32_t drop_count;
-  uint32_t total_dqbuf_calls;
+  uint32_t total_dqbuf_calls;    // ✅ NOUVEAU : Compteur de tentatives DQBUF
 };
 
 // Structure pour les opérations V4L2
@@ -62,7 +62,8 @@ struct esp_video_ops {
 /**
  * @brief Adaptateur V4L2 pour mipi_dsi_cam
  * 
- * Implémentation complète de l'interface V4L2 standard
+ * Implémentation complète de l'interface V4L2 standard avec gestion
+ * des séquences de frames pour éviter les duplicatas
  */
 class MipiDsiCamV4L2Adapter {
  public:
