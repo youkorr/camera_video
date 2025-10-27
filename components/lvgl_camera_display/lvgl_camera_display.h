@@ -72,6 +72,7 @@ class LVGLCameraDisplay : public Component {
 
 #ifdef USE_ESP32_VARIANT_ESP32P4
   // ==== Interface V4L2 ====
+  const char *video_device_ = ESP_VIDEO_MIPI_CSI_DEVICE_NAME;  // ✅ correction principale
   int video_fd_{-1};
   static constexpr int VIDEO_BUFFER_COUNT = 2;
   uint8_t *mmap_buffers_[VIDEO_BUFFER_COUNT]{};
@@ -96,11 +97,15 @@ class LVGLCameraDisplay : public Component {
   bool init_ppa_();
   void deinit_ppa_();
   bool transform_frame_(const uint8_t *src, uint8_t *dst);
+
+  // ==== Nouveau : rendu direct ====
+  void direct_display_(uint8_t *buffer, uint16_t w, uint16_t h);  // ✅ ajouté
 #endif
 };
 
 }  // namespace lvgl_camera_display
 }  // namespace esphome
+
 
 
 
