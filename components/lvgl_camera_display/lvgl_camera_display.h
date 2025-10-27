@@ -8,84 +8,61 @@
 #include <fcntl.h>
 #include "ioctl.h"
 #include "mman.h"
-#include <errno.h>
-#include "driver/ppa.h"
 #include "../mipi_dsi_cam/videodev2.h"
 #include "../mipi_dsi_cam/esp_video_device.h"
 #include "../mipi_dsi_cam/mipi_dsi_cam.h"
+#include "driver/ppa.h"
 #endif
 
 namespace esphome {
 namespace lvgl_camera_display {
 
-using namespace esphome::mipi_dsi_cam;
+// Configuration
+#define VIDEO_BUFFER_COUNT 2
 
 enum RotationAngle {
   ROTATION_0 = 0,
-  ROTATION_90,
-  ROTATION_180,
-  ROTATION_270
+  ROTATION_90 = 90,
+  ROTATION_180 = 180,
+  ROTATION_270 = 270
 };
 
 class LVGLCameraDisplay : public Component {
  public:
-  // ==== Méthodes principales ====
   void setup() override;
   void loop() override;
   void dump_config() override;
+  float get_setup_priority() const override { return setup_priority::LATE; }
 
-  // ==== Setters YAML ====
-  void set_camera(MipiDsiCam *cam) { this->camera_ = cam; }
-  void set_update_interval(uint32_t interval) { this->update_interval_ = interval; }
-  void set_rotation(RotationAngle rot) { this->rotation_ = rot; }
-  void set_mirror_x(bool mirror) { this->mirror_x_ = mirror; }
-  void set_mirror_y(bool mirror) { this->mirror_y_ = mirror; }
-  void set_direct_mode(bool direct) { this->direct_mode_ = direct; }
-  void set_use_ppa(bool enable) { this->use_ppa_ = enable; }
-
-  // ==== LVGL ====
-  void configure_canvas(lv_obj_t *canvas) { this->canvas_obj_ = canvas; }
+  void set_camera(mipi_dsi_cam::MipiDsiCam *camera) { this->camera_ = camera; }
+  void configure_canvas(lv_obj_t *canvas);
+  void set_update_interval(uint32_t interval_ms) { this->update_interval_ = interval_ms; }
+  
+  void set_rotation(RotationAngle rotation) { this->rotation_ = rotation; }
+  void set_mirror_x(bool enable) { this->mirror_x_ = enable; }
+  void set_mirror_y(bool enable) { this->mirror_y_ = enable; }
 
  protected:
-  // ==== Référence caméra ====
-  MipiDsiCam *camera_{nullptr};
-
-  // ==== Objet LVGL (facultatif) ====
-  lv_obj_t *canvas_obj_{nullptr};
-
-  // ==== Configuration ====
-  uint32_t update_interval_{33};
-  RotationAngle rotation_{ROTATION_0};
-  bool mirror_x_{false};
-  bool mirror_y_{false};
-  bool direct_mode_{false};
-  bool use_ppa_{true};
-
-  // ==== État ====
-  uint32_t width_{0};
-  uint32_t height_{0};
-  uint32_t last_update_time_{0};
-  uint32_t frame_count_{0};
-  uint32_t drop_count_{0};
-  uint32_t last_fps_time_{0};
-  bool first_update_{true};
-
+  mipi_dsi_cam::MipiDsiCam *camera_{nullptr};
+  
 #ifdef USE_ESP32_VARIANT_ESP32P4
-  // ==== Interface V4L2 ====
-  const char *video_device_ = ESP_VIDEO_MIPI_CSI_DEVICE_NAME;  // ✅ correction principale
+  // V4L2 device
   int video_fd_{-1};
-  static constexpr int VIDEO_BUFFER_COUNT = 2;
-  uint8_t *mmap_buffers_[VIDEO_BUFFER_COUNT]{};
+  const char *video_device_{ESP_VIDEO_MIPI_CSI_DEVICE_NAME};
+  
+  // Buffers mmappés
+  uint8_t *mmap_buffers_[VIDEO_BUFFER_COUNT]{nullptr};
   size_t buffer_length_{0};
-  bool v4l2_streaming_{false};
   int current_buffer_index_{-1};
 
-  // ==== Accélération matérielle PPA ====
+  uint8_t *work_buffer_{nullptr};
+  
+  // PPA
   ppa_client_handle_t ppa_handle_{nullptr};
   uint8_t *transform_buffer_{nullptr};
   size_t transform_buffer_size_{0};
-
-  // ==== Fonctions internes (implémentées dans .cpp) ====
+  
+  // Méthodes V4L2
   bool open_v4l2_device_();
   bool setup_v4l2_format_();
   bool setup_v4l2_buffers_();
@@ -93,18 +70,40 @@ class LVGLCameraDisplay : public Component {
   bool capture_v4l2_frame_(uint8_t **frame_data);
   void release_v4l2_frame_();
   void cleanup_v4l2_();
-
+  
+  // PPA
   bool init_ppa_();
   void deinit_ppa_();
   bool transform_frame_(const uint8_t *src, uint8_t *dst);
-
-  // ==== Nouveau : rendu direct ====
-  void direct_display_(uint8_t *buffer, uint16_t w, uint16_t h);  // ✅ ajouté
 #endif
+
+  lv_obj_t *canvas_obj_{nullptr};
+  
+  uint16_t width_{1280};
+  uint16_t height_{720};
+  RotationAngle rotation_{ROTATION_0};
+  bool mirror_x_{false};
+  bool mirror_y_{false};
+  uint32_t update_interval_{33};
+  
+  uint32_t frame_count_{0};
+  uint32_t drop_count_{0};
+  uint32_t last_update_time_{0};
+  uint32_t last_fps_time_{0};
+  bool first_update_{true};
+  bool v4l2_streaming_{false};
 };
 
 }  // namespace lvgl_camera_display
 }  // namespace esphome
+
+
+
+
+
+
+
+
 
 
 
