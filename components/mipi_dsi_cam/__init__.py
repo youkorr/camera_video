@@ -27,8 +27,7 @@ CONF_FRAMERATE = "framerate"
 CONF_JPEG_QUALITY = "jpeg_quality"
 CONF_ENABLE_V4L2 = "enable_v4l2"
 CONF_ENABLE_ISP_PIPELINE = "enable_isp_pipeline"
-#CONF_ENABLE_JPEG_ENCODER = "enable_jpeg_encoder"
-#CONF_ENABLE_H264_ENCODER = "enable_h264_encoder"
+
 
 PixelFormat = mipi_dsi_cam_ns.enum("PixelFormat")
 PIXEL_FORMAT_RGB565 = PixelFormat.PIXEL_FORMAT_RGB565
@@ -136,8 +135,7 @@ CONFIG_SCHEMA = cv.Schema(
         # Options V4L2 et encoders - V4L2 et ISP activés par défaut
         cv.Optional(CONF_ENABLE_V4L2, default=True): cv.boolean,
         cv.Optional(CONF_ENABLE_ISP_PIPELINE, default=True): cv.boolean,
-        cv.Optional(CONF_ENABLE_JPEG_ENCODER, default=False): cv.boolean,
-        cv.Optional(CONF_ENABLE_H264_ENCODER, default=False): cv.boolean,
+
     }
 ).extend(cv.COMPONENT_SCHEMA).extend(i2c.i2c_device_schema(0x36))
 
@@ -203,8 +201,7 @@ async def to_code(config):
     # ✅ CORRECTION: Récupérer les valeurs AVANT de les utiliser
     enable_v4l2 = config.get(CONF_ENABLE_V4L2, True)
     enable_isp = config.get(CONF_ENABLE_ISP_PIPELINE, True)
-    #enable_jpeg = config.get(CONF_ENABLE_JPEG_ENCODER, False)
-    #enable_h264 = config.get(CONF_ENABLE_H264_ENCODER, False)
+
     
     # Toujours ajouter ces defines (toujours disponibles)
     cg.add_define("MIPI_DSI_CAM_ENABLE_V4L2")
@@ -217,13 +214,7 @@ async def to_code(config):
     if enable_isp:
         cg.add(var.set_enable_isp(True))
     
-    #if enable_jpeg:
-        #cg.add_define("MIPI_DSI_CAM_ENABLE_JPEG")
-        #cg.add(var.set_enable_jpeg(True))
-    
-    #if enable_h264:
-        #cg.add_define("MIPI_DSI_CAM_ENABLE_H264")
-        #cg.add(var.set_enable_h264(True))
+
     
     # Générer le code des drivers
     import os
@@ -280,8 +271,7 @@ inline ISensorDriver* create_sensor_driver(const std::string& sensor_type, i2c::
     
     v4l2_msg = "enabled" if enable_v4l2 else "disabled"
     isp_msg = "enabled" if enable_isp else "disabled"
-    #jpeg_msg = "enabled" if enable_jpeg else "disabled"
-    #h264_msg = "enabled" if enable_h264 else "disabled"
+
     
     cg.add(cg.RawExpression(f'''
         ESP_LOGI("compile", "Camera configuration:");
@@ -294,6 +284,5 @@ inline ISensorDriver* create_sensor_driver(const std::string& sensor_type, i2c::
         ESP_LOGI("compile", "  External Clock: {ext_clock_msg}");
         ESP_LOGI("compile", "  V4L2 Interface: {v4l2_msg}");
         ESP_LOGI("compile", "  ISP Pipeline: {isp_msg}");
-        ESP_LOGI("compile", "  JPEG Encoder: {jpeg_msg}");
-        ESP_LOGI("compile", "  H264 Encoder: {h264_msg}");
+
     '''))
