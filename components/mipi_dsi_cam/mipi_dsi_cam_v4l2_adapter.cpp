@@ -313,7 +313,7 @@ esp_err_t MipiDsiCamV4L2Adapter::v4l2_reqbufs(void *video, void *reqbufs) {
         struct esp_video_buffer_info buffer_info = {
             .count = req->count,
             .size = ctx->width * ctx->height * 2,  // RGB565
-            .align_size = 64,
+            .align_size = 128, //64
             .caps = MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT,
             .memory_type = V4L2_MEMORY_MMAP
         };
