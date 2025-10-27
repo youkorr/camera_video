@@ -123,7 +123,8 @@ public:
   void set_brightness_level(uint8_t level);
   void adjust_exposure(uint16_t exposure_value);
   void adjust_gain(uint8_t gain_index);
-  
+
+  uint8_t get_fps() const { return this->framerate_; }
   // Balance des blancs
   void set_auto_white_balance(bool enable);
   void set_white_balance_gains(float red, float green, float blue, bool update_fixed = true);
