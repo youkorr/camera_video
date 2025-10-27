@@ -28,11 +28,18 @@ CONF_JPEG_QUALITY = "jpeg_quality"
 CONF_ENABLE_V4L2 = "enable_v4l2"
 CONF_ENABLE_ISP_PIPELINE = "enable_isp_pipeline"
 
-# ✅ CORRECTION : Déclarer l'enum comme class-based
+# ✅ Déclarer l'enum comme class-based
 PixelFormat = mipi_dsi_cam_ns.enum("PixelFormat", is_class=True)
 
-# ✅ CORRECTION : Utiliser des strings pour la validation
+# ✅ Options pour la validation YAML (ce que l'utilisateur écrit)
 PIXEL_FORMAT_OPTIONS = {
+    "RGB565": "RGB565",
+    "YUV422": "YUV422",
+    "RAW8": "RAW8",
+}
+
+# ✅ Mapping vers les noms réels de l'enum C++
+PIXEL_FORMAT_MAPPING = {
     "RGB565": "PIXEL_FORMAT_RGB565",
     "YUV422": "PIXEL_FORMAT_YUV422",
     "RAW8": "PIXEL_FORMAT_RAW8",
@@ -124,14 +131,12 @@ CONFIG_SCHEMA = cv.Schema(
         cv.Optional(CONF_LANE): cv.int_range(min=1, max=4),
         cv.Optional(CONF_ADDRESS_SENSOR): cv.i2c_address,
         cv.Optional(CONF_RESOLUTION): validate_resolution,
-        # ✅ CORRECTION : Utiliser PIXEL_FORMAT_OPTIONS au lieu de PIXEL_FORMATS
         cv.Optional(CONF_PIXEL_FORMAT, default="RGB565"): cv.enum(PIXEL_FORMAT_OPTIONS, upper=True),
         cv.Optional(CONF_FRAMERATE): cv.int_range(min=1, max=60),
         cv.Optional(CONF_JPEG_QUALITY, default=10): cv.int_range(min=1, max=63),
         
         cv.Optional(CONF_ENABLE_V4L2, default=True): cv.boolean,
         cv.Optional(CONF_ENABLE_ISP_PIPELINE, default=True): cv.boolean,
-
     }
 ).extend(cv.COMPONENT_SCHEMA).extend(i2c.i2c_device_schema(0x36))
 
@@ -186,9 +191,10 @@ async def to_code(config):
     cg.add(var.set_bayer_pattern(sensor_info['bayer_pattern']))
     cg.add(var.set_lane_bitrate(sensor_info['lane_bitrate_mbps']))
     
-    # ✅ CORRECTION : Convertir le string en valeur d'enum
-    pixel_format_str = config[CONF_PIXEL_FORMAT]
-    pixel_format_enum = getattr(PixelFormat, pixel_format_str)
+    # ✅ CORRECTION FINALE : Mapping correct YAML -> enum C++
+    pixel_format_key = config[CONF_PIXEL_FORMAT]  # "RGB565" depuis YAML
+    pixel_format_enum_name = PIXEL_FORMAT_MAPPING[pixel_format_key]  # "PIXEL_FORMAT_RGB565"
+    pixel_format_enum = getattr(PixelFormat, pixel_format_enum_name)  # PixelFormat::PIXEL_FORMAT_RGB565
     cg.add(var.set_pixel_format(pixel_format_enum))
     
     cg.add(var.set_jpeg_quality(config[CONF_JPEG_QUALITY]))
