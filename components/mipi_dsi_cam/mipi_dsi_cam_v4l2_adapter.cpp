@@ -305,15 +305,15 @@ esp_err_t MipiDsiCamV4L2Adapter::v4l2_reqbufs(void *video, void *reqbufs) {
     
     // Créer les nouveaux buffers
     if (req->count > 0) {
-        if (req->count > 8) {
+        if (req->count > 16) { //8
             ESP_LOGW(TAG, "⚠️  Limiting buffer count from %u to 8", req->count);
-            req->count = 8;
+            req->count = 16;
         }
         
         struct esp_video_buffer_info buffer_info = {
             .count = req->count,
             .size = ctx->width * ctx->height * 2,  // RGB565
-            .align_size = 128, //64
+            .align_size = 64, //64
             .caps = MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT,
             .memory_type = V4L2_MEMORY_MMAP
         };
