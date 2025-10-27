@@ -11,6 +11,8 @@ CONF_UPDATE_INTERVAL = "update_interval"
 CONF_ROTATION = "rotation"
 CONF_MIRROR_X = "mirror_x"
 CONF_MIRROR_Y = "mirror_y"
+CONF_DIRECT_MODE = "direct_mode"
+CONF_USE_PPA = "use_ppa"
 
 lvgl_camera_display_ns = cg.esphome_ns.namespace("lvgl_camera_display")
 LVGLCameraDisplay = lvgl_camera_display_ns.class_("LVGLCameraDisplay", cg.Component)
@@ -30,11 +32,13 @@ MipiDsiCam = mipi_dsi_cam_ns.class_("MipiDsiCam")
 CONFIG_SCHEMA = cv.Schema({
     cv.GenerateID(): cv.declare_id(LVGLCameraDisplay),
     cv.Required(CONF_CAMERA_ID): cv.use_id(MipiDsiCam),
-    cv.Required(CONF_CANVAS_ID): cv.string,
+    cv.Optional(CONF_CANVAS_ID): cv.string,  # Optionnel si direct_mode est activé
     cv.Optional(CONF_UPDATE_INTERVAL, default="33ms"): cv.positive_time_period_milliseconds,
     cv.Optional(CONF_ROTATION, default=0): cv.enum(ROTATION_ANGLES, int=True),
     cv.Optional(CONF_MIRROR_X, default=False): cv.boolean,
     cv.Optional(CONF_MIRROR_Y, default=False): cv.boolean,
+    cv.Optional(CONF_DIRECT_MODE, default=True): cv.boolean,  # ✅ Mode direct par défaut
+    cv.Optional(CONF_USE_PPA, default=True): cv.boolean,      # ✅ PPA activé par défaut
 }).extend(cv.COMPONENT_SCHEMA)
 
 
@@ -55,10 +59,16 @@ async def to_code(config):
     cg.add(var.set_mirror_x(config[CONF_MIRROR_X]))
     cg.add(var.set_mirror_y(config[CONF_MIRROR_Y]))
     
+    # ✅ Activer le mode direct et PPA
+    cg.add(var.set_direct_mode(config[CONF_DIRECT_MODE]))
+    cg.add(var.set_use_ppa(config[CONF_USE_PPA]))
+    
     # Logger la configuration
     rotation_str = f"{config[CONF_ROTATION]}°"
     mirror_x_str = "ON" if config[CONF_MIRROR_X] else "OFF"
     mirror_y_str = "ON" if config[CONF_MIRROR_Y] else "OFF"
+    direct_mode_str = "DIRECT (PPA→framebuffer)" if config[CONF_DIRECT_MODE] else "CANVAS (software)"
+    ppa_str = "ENABLED" if config[CONF_USE_PPA] else "DISABLED"
     
     cg.add(cg.RawExpression(f'''
         ESP_LOGI("compile", "LVGL Camera Display configuration:");
@@ -66,5 +76,7 @@ async def to_code(config):
         ESP_LOGI("compile", "  Rotation: {rotation_str}");
         ESP_LOGI("compile", "  Mirror X: {mirror_x_str}");
         ESP_LOGI("compile", "  Mirror Y: {mirror_y_str}");
+        ESP_LOGI("compile", "  Display Mode: {direct_mode_str}");
+        ESP_LOGI("compile", "  PPA: {ppa_str}");
     '''))
 
