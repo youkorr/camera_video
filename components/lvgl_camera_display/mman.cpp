@@ -25,7 +25,7 @@ struct mmap_entry {
     off_t offset;
 };
 
-#define MAX_MMAP_ENTRIES 32
+#define MAX_MMAP_ENTRIES 64  // ✅ Augmenter pour supporter plus de buffers
 static struct mmap_entry mmap_table[MAX_MMAP_ENTRIES];
 static bool mmap_table_init = false;
 
@@ -121,3 +121,4 @@ int munmap(void *addr, size_t length) {
 }
 
 #endif // USE_ESP32_VARIANT_ESP32P4
+
