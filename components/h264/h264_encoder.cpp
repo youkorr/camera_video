@@ -15,6 +15,12 @@
 
 #ifdef USE_ESP32_VARIANT_ESP32P4
 
+// ✅ AJOUT : Déclaration des fonctions de création des devices
+extern "C" {
+  esp_err_t mipi_dsi_cam_video_init(void);
+  esp_err_t mipi_dsi_cam_create_h264_device(bool high_profile);
+}
+
 namespace esphome {
 namespace h264 {
 
@@ -96,12 +102,32 @@ esp_err_t H264Encoder::init_internal_() {
     return ESP_OK;
   }
 
+  // ✅ AJOUT : Initialiser le système vidéo
+  ESP_LOGI(TAG, "Initializing video subsystem...");
+  esp_err_t ret = mipi_dsi_cam_video_init();
+  if (ret != ESP_OK && ret != ESP_ERR_INVALID_STATE) {
+    ESP_LOGW(TAG, "Video subsystem init returned: 0x%x", ret);
+  }
+
+  // ✅ AJOUT : Créer le device H.264 s'il n'existe pas
+  ESP_LOGI(TAG, "Creating H.264 device...");
+  ret = mipi_dsi_cam_create_h264_device(false);
+  if (ret != ESP_OK && ret != ESP_ERR_INVALID_STATE) {
+    ESP_LOGW(TAG, "Failed to create H.264 device: 0x%x (may already exist)", ret);
+  }
+
+  // Petit délai pour laisser le device se stabiliser
+  delay(50);
+
   // Ouvrir le device H264
   this->h264_fd_ = open(ESP_VIDEO_H264_DEVICE_NAME, O_RDWR | O_NONBLOCK);
   if (this->h264_fd_ < 0) {
-    ESP_LOGE(TAG, "Failed to open H264 device %s", ESP_VIDEO_H264_DEVICE_NAME);
+    ESP_LOGE(TAG, "Failed to open H264 device %s (errno=%d)", 
+             ESP_VIDEO_H264_DEVICE_NAME, errno);
     return ESP_FAIL;
   }
+
+  ESP_LOGI(TAG, "✅ H.264 device opened (fd=%d)", this->h264_fd_);
 
   const uint32_t w = this->camera_->get_image_width();
   const uint32_t h = this->camera_->get_image_height();
@@ -134,7 +160,7 @@ esp_err_t H264Encoder::init_internal_() {
     return ESP_ERR_NO_MEM;
   }
 
-  // ✅ CORRECTION : Déclarer les variables AVANT les goto
+  // Déclarer les variables AVANT les goto
   struct v4l2_format in_fmt = {};
   struct v4l2_format out_fmt = {};
   struct v4l2_streamparm parm = {};
@@ -163,7 +189,7 @@ esp_err_t H264Encoder::init_internal_() {
     goto fail;
   }
 
-  // FPS si supporté (✅ CORRECTION : utiliser .parm)
+  // FPS si supporté
   parm.type = V4L2_BUF_TYPE_VIDEO_OUTPUT;
   parm.parm.output.timeperframe.numerator = 1;
   parm.parm.output.timeperframe.denominator = std::max<uint32_t>(1, this->camera_->get_fps());
