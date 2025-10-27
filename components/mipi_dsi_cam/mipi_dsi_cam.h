@@ -136,11 +136,15 @@ class MipiDsiCam : public Component, public i2c::I2CDevice {
   void enable_h264_encoder(uint32_t bitrate = 2000000, uint32_t gop_size = 30);
   
 #ifdef MIPI_DSI_CAM_ENABLE_JPEG
-  MipiDsiCamJPEGEncoder* get_jpeg_encoder() { return this->jpeg_encoder_; }
+  MipiDsiCamJPEGEncoder* get_jpeg_encoder() { 
+    return static_cast<MipiDsiCamJPEGEncoder*>(this->jpeg_encoder_); 
+  }
 #endif
 
 #ifdef MIPI_DSI_CAM_ENABLE_H264
-  MipiDsiCamH264Encoder* get_h264_encoder() { return this->h264_encoder_; }
+  MipiDsiCamH264Encoder* get_h264_encoder() { 
+    return static_cast<MipiDsiCamH264Encoder*>(this->h264_encoder_); 
+  }
 #endif
 
  protected:
@@ -198,14 +202,9 @@ class MipiDsiCam : public Component, public i2c::I2CDevice {
   MipiDsiCamV4L2Adapter *v4l2_adapter_{nullptr};
   MipiDsiCamISPPipeline *isp_pipeline_{nullptr};
   
-  // Encodeurs - pointeurs conditionnels
-#ifdef MIPI_DSI_CAM_ENABLE_JPEG
-  MipiDsiCamJPEGEncoder *jpeg_encoder_{nullptr};
-#endif
-
-#ifdef MIPI_DSI_CAM_ENABLE_H264
-  MipiDsiCamH264Encoder *h264_encoder_{nullptr};
-#endif
+  // Encodeurs - pointeurs void* pour éviter les problèmes de compilation
+  void *jpeg_encoder_{nullptr};  // MipiDsiCamJPEGEncoder* si MIPI_DSI_CAM_ENABLE_JPEG
+  void *h264_encoder_{nullptr};  // MipiDsiCamH264Encoder* si MIPI_DSI_CAM_ENABLE_H264
   
 #ifdef USE_ESP32_VARIANT_ESP32P4
   esp_cam_ctlr_handle_t csi_handle_{nullptr};
@@ -241,7 +240,6 @@ class MipiDsiCam : public Component, public i2c::I2CDevice {
 
 }  // namespace mipi_dsi_cam
 }  // namespace esphome
-
 
 
 
