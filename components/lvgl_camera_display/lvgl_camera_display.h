@@ -19,7 +19,7 @@ namespace esphome {
 namespace lvgl_camera_display {
 
 // Configuration
-#define VIDEO_BUFFER_COUNT 3
+#define VIDEO_BUFFER_COUNT 2
 
 enum RotationAngle {
   ROTATION_0 = 0,
