@@ -93,7 +93,7 @@ public:
   bool is_initialized() const { return this->initialized_; }
   bool has_external_clock() const { return this->external_clock_pin_ >= 0; }
   
-  // ✅ NOUVEAU : Getter pour l'adaptateur V4L2
+  // Getters pour les adaptateurs
   MipiDsiCamV4L2Adapter* get_v4l2_adapter() const { return this->v4l2_adapter_; }
   MipiDsiCamISPPipeline* get_isp_pipeline() const { return this->isp_pipeline_; }
   
@@ -126,7 +126,7 @@ public:
   
   // Balance des blancs
   void set_auto_white_balance(bool enable);
-  void set_white_balance_gains(float red, float green, float blue);
+  void set_white_balance_gains(float red, float green, float blue, bool update_fixed = true);
   
   // Activer les adaptateurs
   void enable_v4l2_adapter();
@@ -232,7 +232,6 @@ extern ISensorDriver* create_sensor_driver(const std::string& sensor_type, i2c::
 } // namespace esphome
 
 #endif // USE_ESP32_VARIANT_ESP32P4
-
 
 
 
