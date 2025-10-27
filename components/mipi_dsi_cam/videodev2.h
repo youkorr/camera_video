@@ -88,6 +88,7 @@ typedef int64_t  __s64;
 #define V4L2_CAP_VIDEO_M2M            0x00008000
 #define V4L2_CAP_VIDEO_M2M_MPLANE     0x00004000
 #define V4L2_CAP_DEVICE_CAPS          0x80000000
+#define V4L2_MODE_HIGHQUALITY 0x0001
 
 /* ===================== Fields / types / mémoire ===================== */
 enum v4l2_field {
@@ -440,28 +441,30 @@ struct v4l2_buffer {
 };
 
 struct v4l2_captureparm {
-    __u32 capability;
-    __u32 capturemode;
-    struct v4l2_fract timeperframe;
-    __u32 extendedmode;
-    __u32 readbuffers;
+    __u32 capability;       /* Supported modes */
+    __u32 capturemode;      /* Current mode */
+    struct v4l2_fract timeperframe;  /* Time per frame in seconds */
+    __u32 extendedmode;     /* Driver-specific extensions */
+    __u32 readbuffers;      /* # of buffers for read */
     __u32 reserved[4];
 };
+
 struct v4l2_outputparm {
-    __u32 capability;
-    __u32 outputmode;
-    struct v4l2_fract timeperframe;
-    __u32 extendedmode;
-    __u32 writebuffers;
+    __u32 capability;       /* Supported modes */
+    __u32 outputmode;       /* Current mode */
+    struct v4l2_fract timeperframe;  /* Time per frame in seconds */
+    __u32 extendedmode;     /* Driver-specific extensions */
+    __u32 writebuffers;     /* # of buffers for write */
     __u32 reserved[4];
 };
+
 struct v4l2_streamparm {
-    __u32 type;
+    __u32 type;             /* enum v4l2_buf_type */
     union {
         struct v4l2_captureparm capture;
         struct v4l2_outputparm  output;
         __u8 raw_data[200];
-    };
+    } parm;  /* ✅ CORRECTION : ajouter ".parm" explicitement */
 };
 
 /* ===================== Contrôles ===================== */
