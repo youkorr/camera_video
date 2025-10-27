@@ -12,16 +12,16 @@
 #include "mipi_dsi_cam_isp_pipeline.h"
 #endif
 
-#ifdef MIPI_DSI_CAM_ENABLE_JPEG
-#include "mipi_dsi_cam_encoders.h"
-#endif
+//#ifdef MIPI_DSI_CAM_ENABLE_JPEG
+//#include "mipi_dsi_cam_encoders.h"
+//#endif
 
-#ifdef MIPI_DSI_CAM_ENABLE_H264
+//#ifdef MIPI_DSI_CAM_ENABLE_H264
 // H264 inclus dans le même fichier que JPEG
-#ifndef MIPI_DSI_CAM_ENABLE_JPEG
-#include "mipi_dsi_cam_encoders.h"
-#endif
-#endif
+//#ifndef MIPI_DSI_CAM_ENABLE_JPEG
+//#include "mipi_dsi_cam_encoders.h"
+//#endif
+//#endif
 
 #ifdef USE_ESP32_VARIANT_ESP32P4
 
@@ -105,16 +105,16 @@ void MipiDsiCam::setup() {
   }
   
   // Initialiser JPEG encoder si demandé
-  if (this->enable_jpeg_on_setup_) {
-    ESP_LOGI(TAG, "Auto-enabling JPEG encoder...");
-    this->enable_jpeg_encoder();
-  }
+  //if (this->enable_jpeg_on_setup_) {
+    //ESP_LOGI(TAG, "Auto-enabling JPEG encoder...");
+    //this->enable_jpeg_encoder();
+  //}
   
   // Initialiser H264 encoder si demandé
-  if (this->enable_h264_on_setup_) {
-    ESP_LOGI(TAG, "Auto-enabling H264 encoder...");
-    this->enable_h264_encoder();
-  }
+  //if (this->enable_h264_on_setup_) {
+    //ESP_LOGI(TAG, "Auto-enabling H264 encoder...");
+    //this->enable_h264_encoder();
+  //}
   
   ESP_LOGI(TAG, "Camera ready (%ux%u) with Auto Exposure", this->width_, this->height_);
 }
@@ -699,54 +699,7 @@ void MipiDsiCam::enable_isp_pipeline() {
   }
 }
 
-void MipiDsiCam::enable_jpeg_encoder(uint8_t quality) {
-#ifdef MIPI_DSI_CAM_ENABLE_JPEG
-  if (this->jpeg_encoder_ != nullptr) {
-    ESP_LOGW(TAG, "JPEG encoder already enabled");
-    return;
-  }
-  
-  ESP_LOGI(TAG, "Enabling JPEG encoder (quality=%u)...", quality);
-  MipiDsiCamJPEGEncoder *encoder = new MipiDsiCamJPEGEncoder(this);
-  
-  esp_err_t ret = encoder->init(quality);
-  if (ret != ESP_OK) {
-    ESP_LOGE(TAG, "Failed to initialize JPEG encoder: 0x%x", ret);
-    delete encoder;
-  } else {
-    this->jpeg_encoder_ = encoder;
-    ESP_LOGI(TAG, "✅ JPEG encoder enabled");
-  }
-#else
-  (void)quality;  // Éviter warning unused parameter
-  ESP_LOGW(TAG, "JPEG encoder not compiled - enable in YAML config");
-#endif
-}
 
-void MipiDsiCam::enable_h264_encoder(uint32_t bitrate, uint32_t gop_size) {
-#ifdef MIPI_DSI_CAM_ENABLE_H264
-  if (this->h264_encoder_ != nullptr) {
-    ESP_LOGW(TAG, "H264 encoder already enabled");
-    return;
-  }
-  
-  ESP_LOGI(TAG, "Enabling H264 encoder (bitrate=%u, gop=%u)...", bitrate, gop_size);
-  MipiDsiCamH264Encoder *encoder = new MipiDsiCamH264Encoder(this);
-  
-  esp_err_t ret = encoder->init(bitrate, gop_size);
-  if (ret != ESP_OK) {
-    ESP_LOGE(TAG, "Failed to initialize H264 encoder: 0x%x", ret);
-    delete encoder;
-  } else {
-    this->h264_encoder_ = encoder;
-    ESP_LOGI(TAG, "✅ H264 encoder enabled");
-  }
-#else
-  (void)bitrate;   // Éviter warning unused parameter
-  (void)gop_size;  // Éviter warning unused parameter
-  ESP_LOGW(TAG, "H264 encoder not compiled - enable in YAML config");
-#endif
-}
 
 uint8_t MipiDsiCam::get_fps() const { 
   return this->framerate_; 
