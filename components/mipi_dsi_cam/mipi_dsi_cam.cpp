@@ -719,6 +719,7 @@ void MipiDsiCam::enable_jpeg_encoder(uint8_t quality) {
     ESP_LOGI(TAG, "✅ JPEG encoder enabled");
   }
 #else
+  (void)quality; // Éviter warning unused parameter
   ESP_LOGW(TAG, "JPEG encoder not compiled - enable in YAML config");
 #endif
 }
@@ -742,6 +743,8 @@ void MipiDsiCam::enable_h264_encoder(uint32_t bitrate, uint32_t gop_size) {
     ESP_LOGI(TAG, "✅ H264 encoder enabled");
   }
 #else
+  (void)bitrate;   // Éviter warning unused parameter
+  (void)gop_size;  // Éviter warning unused parameter
   ESP_LOGW(TAG, "H264 encoder not compiled - enable in YAML config");
 #endif
 }
