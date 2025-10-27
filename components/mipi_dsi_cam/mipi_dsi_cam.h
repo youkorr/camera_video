@@ -131,14 +131,15 @@ class MipiDsiCam : public Component, public i2c::I2CDevice {
   MipiDsiCamV4L2Adapter* get_v4l2_adapter() { return this->v4l2_adapter_; }
   MipiDsiCamISPPipeline* get_isp_pipeline() { return this->isp_pipeline_; }
   
-  // Encodeurs JPEG et H264
-#ifdef MIPI_DSI_CAM_ENABLE_JPEG
+  // ✅ Encodeurs JPEG et H264 - Déclarations TOUJOURS présentes
   void enable_jpeg_encoder(uint8_t quality = 80);
+  void enable_h264_encoder(uint32_t bitrate = 2000000, uint32_t gop_size = 30);
+  
+#ifdef MIPI_DSI_CAM_ENABLE_JPEG
   MipiDsiCamJPEGEncoder* get_jpeg_encoder() { return this->jpeg_encoder_; }
 #endif
 
 #ifdef MIPI_DSI_CAM_ENABLE_H264
-  void enable_h264_encoder(uint32_t bitrate = 2000000, uint32_t gop_size = 30);
   MipiDsiCamH264Encoder* get_h264_encoder() { return this->h264_encoder_; }
 #endif
 
@@ -197,7 +198,7 @@ class MipiDsiCam : public Component, public i2c::I2CDevice {
   MipiDsiCamV4L2Adapter *v4l2_adapter_{nullptr};
   MipiDsiCamISPPipeline *isp_pipeline_{nullptr};
   
-  // Encodeurs
+  // Encodeurs - pointeurs conditionnels
 #ifdef MIPI_DSI_CAM_ENABLE_JPEG
   MipiDsiCamJPEGEncoder *jpeg_encoder_{nullptr};
 #endif
