@@ -39,6 +39,8 @@ MipiDsiCamV4L2Adapter::MipiDsiCamV4L2Adapter(MipiDsiCam *camera) {
     this->context_.queued_count = 0;
     this->context_.frame_count = 0;
     this->context_.drop_count = 0;
+    this->context_.last_frame_sequence = 0;  // ✅ NOUVEAU
+    this->context_.total_dqbuf_calls = 0;    // ✅ NOUVEAU
 }
 
 MipiDsiCamV4L2Adapter::~MipiDsiCamV4L2Adapter() {
@@ -149,6 +151,7 @@ esp_err_t MipiDsiCamV4L2Adapter::v4l2_start(void *video, uint32_t type) {
     ctx->streaming = true;
     ctx->frame_count = 0;
     ctx->drop_count = 0;
+    ctx->last_frame_sequence = 0;  // ✅ NOUVEAU : Reset au démarrage
     
     ESP_LOGI(TAG, "✅ Streaming started via V4L2 (%u buffers)", ctx->buffer_count);
     return ESP_OK;
@@ -177,8 +180,10 @@ esp_err_t MipiDsiCamV4L2Adapter::v4l2_stop(void *video, uint32_t type) {
     ctx->streaming = false;
     
     // Reset des buffers
+// Reset des buffers
     if (ctx->buffers) {
         esp_video_buffer_reset(ctx->buffers);
+        ctx->last_frame_sequence = 0;  // ✅ NOUVEAU : Reset à l'arrêt
         ctx->queued_count = 0;
     }
     
@@ -400,30 +405,50 @@ esp_err_t MipiDsiCamV4L2Adapter::v4l2_dqbuf(void *video, void *buffer) {
     MipiCameraV4L2Context *ctx = (MipiCameraV4L2Context*)video;
     struct v4l2_buffer *buf = (struct v4l2_buffer*)buffer;
     
+    ctx->total_dqbuf_calls++;
+    
     if (!ctx->buffers || !ctx->streaming) {
         ESP_LOGE(TAG, "❌ Not streaming or no buffers");
         return ESP_ERR_INVALID_STATE;
     }
     
-    // Vérifier qu'il y a des buffers queued
     if (ctx->queued_count == 0) {
-        ESP_LOGV(TAG, "No buffers queued");
-        return ESP_ERR_NOT_FOUND;  // Sera converti en EAGAIN par le VFS
+        ESP_LOGV(TAG, "DQBUF: No buffers queued");
+        return ESP_ERR_NOT_FOUND;
     }
     
-    // Capturer une nouvelle frame depuis la caméra
-    if (!ctx->camera->capture_frame()) {
-        // Pas de frame disponible - comportement non-bloquant
-        ESP_LOGV(TAG, "No frame available from camera");
-        return ESP_ERR_NOT_FOUND;  // Sera converti en EAGAIN
+    // ========== CORRECTION CRITIQUE ==========
+    // Utiliser acquire_frame() au lieu de capture_frame()
+    // pour s'assurer qu'on a une NOUVELLE frame
+    
+    if (!ctx->camera->acquire_frame(ctx->last_frame_sequence)) {
+        // Pas de nouvelle frame disponible
+        if (ctx->total_dqbuf_calls % 100 == 0) {
+            ESP_LOGD(TAG, "DQBUF: Waiting for new frame (last_seq=%u, cam_seq=%u, calls=%u)",
+                     ctx->last_frame_sequence,
+                     ctx->camera->get_current_sequence(),
+                     ctx->total_dqbuf_calls);
+        }
+        return ESP_ERR_NOT_FOUND;
     }
     
-    // Copier les données dans un buffer queued
+    // On a une nouvelle frame verrouillée !
     uint8_t *camera_data = ctx->camera->get_image_data();
     size_t camera_size = ctx->camera->get_image_size();
+    uint32_t current_sequence = ctx->camera->get_current_sequence();
     
     if (!camera_data) {
-        ESP_LOGE(TAG, "❌ No camera data available");
+        ctx->camera->release_frame();
+        ESP_LOGE(TAG, "❌ DQBUF: No camera data after acquire");
+        return ESP_ERR_INVALID_STATE;
+    }
+    
+    // Vérification de cohérence (ne devrait jamais arriver)
+    if (current_sequence <= ctx->last_frame_sequence) {
+        ctx->camera->release_frame();
+        ESP_LOGE(TAG, "❌ DQBUF: Sequence inconsistency! current=%u, last=%u",
+                 current_sequence, ctx->last_frame_sequence);
+        ctx->drop_count++;
         return ESP_ERR_INVALID_STATE;
     }
     
@@ -437,6 +462,7 @@ esp_err_t MipiDsiCamV4L2Adapter::v4l2_dqbuf(void *video, void *buffer) {
     }
     
     if (!elem) {
+        ctx->camera->release_frame();
         ctx->drop_count++;
         ESP_LOGW(TAG, "⚠️  No queued buffer available (dropped frames: %u)", ctx->drop_count);
         return ESP_ERR_NOT_FOUND;
@@ -447,6 +473,9 @@ esp_err_t MipiDsiCamV4L2Adapter::v4l2_dqbuf(void *video, void *buffer) {
     memcpy(elem->buffer, camera_data, copy_size);
     elem->valid_size = copy_size;
     
+    // ✅ IMPORTANT : Libérer la frame de la caméra maintenant qu'on a copié
+    ctx->camera->release_frame();
+    
     // Remplir la structure buffer
     buf->index = elem->index;
     buf->type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
@@ -456,7 +485,7 @@ esp_err_t MipiDsiCamV4L2Adapter::v4l2_dqbuf(void *video, void *buffer) {
     buf->memory = V4L2_MEMORY_MMAP;
     buf->m.offset = elem->index;
     buf->length = ctx->buffers->info.size;
-    buf->sequence = ctx->frame_count;
+    buf->sequence = current_sequence;  // ✅ Utiliser la vraie séquence
     
     // Timestamp
     gettimeofday(&buf->timestamp, nullptr);
@@ -466,11 +495,17 @@ esp_err_t MipiDsiCamV4L2Adapter::v4l2_dqbuf(void *video, void *buffer) {
     if (ctx->queued_count > 0) {
         ctx->queued_count--;
     }
+    
+    // ✅ CRUCIAL : Mettre à jour la dernière séquence servie
+    ctx->last_frame_sequence = current_sequence;
     ctx->frame_count++;
     
-    //ESP_LOGD(TAG, "V4L2 dqbuf[%u]: %u bytes (frame %u, queued: %u/%u)", 
-             //elem->index, copy_size, ctx->frame_count, 
-             //ctx->queued_count, ctx->buffer_count);
+    if (ctx->frame_count % 30 == 0) {
+        ESP_LOGI(TAG, "✅ DQBUF[%u]: seq=%u, %u bytes (total: %u frames, %u drops, queued: %u/%u)",
+                 elem->index, current_sequence, copy_size,
+                 ctx->frame_count, ctx->drop_count,
+                 ctx->queued_count, ctx->buffer_count);
+    }
     
     return ESP_OK;
 }
