@@ -179,17 +179,7 @@ async def to_code(config):
         width = sensor_info['width']
         height = sensor_info['height']
         resolution_source = "native"
-
-    if enable_h264:
-        cg.add_define("MIPI_DSI_CAM_ENABLE_H264")
     
-    # ✅ AJOUTER CES LIGNES
-    # Activer automatiquement les encodeurs
-    if enable_jpeg:
-        cg.add(var.set_enable_jpeg(True))
-    
-    if enable_h264:
-        cg.add(var.set_enable_h264(True))
     # Paramètres du capteur
     lane_count = config.get(CONF_LANE, sensor_info['lane_count'])
     sensor_address = config.get(CONF_ADDRESS_SENSOR, sensor_info['i2c_address'])
@@ -210,7 +200,7 @@ async def to_code(config):
         reset_pin = await cg.gpio_pin_expression(config[CONF_RESET_PIN])
         cg.add(var.set_reset_pin(reset_pin))
     
-    # Activer les fonctionnalités - V4L2 et ISP TOUJOURS compilés
+    # ✅ CORRECTION: Récupérer les valeurs AVANT de les utiliser
     enable_v4l2 = config.get(CONF_ENABLE_V4L2, True)
     enable_isp = config.get(CONF_ENABLE_ISP_PIPELINE, True)
     enable_jpeg = config.get(CONF_ENABLE_JPEG_ENCODER, False)
@@ -229,9 +219,11 @@ async def to_code(config):
     
     if enable_jpeg:
         cg.add_define("MIPI_DSI_CAM_ENABLE_JPEG")
+        cg.add(var.set_enable_jpeg(True))
     
     if enable_h264:
         cg.add_define("MIPI_DSI_CAM_ENABLE_H264")
+        cg.add(var.set_enable_h264(True))
     
     # Générer le code des drivers
     import os
