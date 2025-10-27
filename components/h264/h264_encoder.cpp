@@ -15,13 +15,8 @@
 
 #ifdef USE_ESP32_VARIANT_ESP32P4
 
+// ✅ CORRECTION : Inclure le header au lieu de redéclarer
 #include "../mipi_dsi_cam/mipi_dsi_cam_video_devices.h"
-
-// ✅ AJOUT : Déclaration des fonctions de création des devices
-extern "C" {
-  esp_err_t mipi_dsi_cam_video_init(void);
-  esp_err_t mipi_dsi_cam_create_h264_device(bool high_profile);
-}
 
 namespace esphome {
 namespace h264 {
