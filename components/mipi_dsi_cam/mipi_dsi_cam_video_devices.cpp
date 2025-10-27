@@ -1,8 +1,9 @@
 #include "mipi_dsi_cam_video_devices.h"
 #include "esp_video_init.h"
 #include "esp_video_device.h"
-#include "videodev2.h"  // ✅ AJOUT : pour v4l2_format
+#include "videodev2.h"
 #include "esphome/core/log.h"
+#include <cstring>  // ✅ AJOUT : pour memset et strncpy
 
 #ifdef USE_ESP32_VARIANT_ESP32P4
 
@@ -98,21 +99,8 @@ static esp_err_t jpeg_querycap(void *video, void *cap) {
   return ESP_OK;
 }
 
-// ✅ Déclaration AVANT utilisation
-struct esp_video_ops {
-  esp_err_t (*init)(void *video);
-  esp_err_t (*deinit)(void *video);
-  esp_err_t (*start)(void *video, uint32_t type);
-  esp_err_t (*stop)(void *video, uint32_t type);
-  esp_err_t (*enum_format)(void *video, uint32_t type, uint32_t index, uint32_t *pixel_format);
-  esp_err_t (*set_format)(void *video, const void *format);
-  esp_err_t (*get_format)(void *video, void *format);
-  esp_err_t (*reqbufs)(void *video, void *reqbufs);
-  esp_err_t (*querybuf)(void *video, void *buffer);
-  esp_err_t (*qbuf)(void *video, void *buffer);
-  esp_err_t (*dqbuf)(void *video, void *buffer);
-  esp_err_t (*querycap)(void *video, void *cap);
-};
+// ✅ SUPPRIMÉ : La redéfinition de struct esp_video_ops
+// Elle existe déjà dans esp_video_init.h
 
 // Table des opérations JPEG
 static const esp_video_ops jpeg_ops = {
