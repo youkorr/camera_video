@@ -6,8 +6,8 @@ SENSOR_INFO = {
     'lane_count': 1,
     'bayer_pattern': 0,  # BGGR
     'lane_bitrate_mbps': 576,
-    'width': 760,#1280,
-    'height': 440#720,
+    'width': 760,   #1280,
+    'height': 440,  #720,
     'fps': 30,
 }
 
