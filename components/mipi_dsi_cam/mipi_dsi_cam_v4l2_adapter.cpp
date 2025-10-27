@@ -305,9 +305,9 @@ esp_err_t MipiDsiCamV4L2Adapter::v4l2_reqbufs(void *video, void *reqbufs) {
     
     // Créer les nouveaux buffers
     if (req->count > 0) {
-        if (req->count > 16) { //8
+        if (req->count > 8) { //8
             ESP_LOGW(TAG, "⚠️  Limiting buffer count from %u to 8", req->count);
-            req->count = 16;
+            req->count = 8;
         }
         
         struct esp_video_buffer_info buffer_info = {
