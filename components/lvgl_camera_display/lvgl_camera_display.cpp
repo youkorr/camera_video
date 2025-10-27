@@ -2,6 +2,10 @@
 #include "esphome/core/log.h"
 #include "esphome/core/application.h"
 
+#ifdef USE_ESP32_VARIANT_ESP32P4
+#include "esp_cache.h"
+#endif
+
 // ✅ Déclaration de la fonction externe (AVANT la classe)
 extern "C" void register_fd_to_device(int real_fd, int temp_fd);
 
@@ -13,6 +17,7 @@ static const char *const TAG = "lvgl_camera_display";
 void LVGLCameraDisplay::setup() {
   ESP_LOGCONFIG(TAG, "🎥 LVGL Camera Display");
   ESP_LOGCONFIG(TAG, "  Mode: %s", this->direct_mode_ ? "DIRECT (DMA/PPA)" : "CANVAS (software)");
+  ESP_LOGCONFIG(TAG, "  PPA: %s", this->use_ppa_ ? "ENABLED" : "DISABLED");
 
 #ifdef USE_ESP32_VARIANT_ESP32P4
   // Récupérer la résolution depuis la caméra
@@ -74,22 +79,30 @@ void LVGLCameraDisplay::setup() {
     return;
   }
 
-  // Initialiser PPA si transformations nécessaires ou si use_ppa activé
+  // ✅ Initialiser PPA si transformations nécessaires ou si use_ppa activé
   if (this->use_ppa_ && (this->rotation_ != ROTATION_0 || this->mirror_x_ || this->mirror_y_ || this->direct_mode_)) {
     if (!this->init_ppa_()) {
       ESP_LOGE(TAG, "❌ Failed to initialize PPA");
-      this->mark_failed();
-      return;
+      // Ne pas fail complètement, on peut continuer sans PPA
+      this->use_ppa_ = false;
+      ESP_LOGW(TAG, "⚠️  Continuing without PPA");
+    } else {
+      ESP_LOGI(TAG, "✅ PPA initialized (rotation=%d°, mirror_x=%s, mirror_y=%s)",
+               this->rotation_, this->mirror_x_ ? "ON" : "OFF", 
+               this->mirror_y_ ? "ON" : "OFF");
     }
-    ESP_LOGI(TAG, "✅ PPA initialized (rotation=%d°, mirror_x=%s, mirror_y=%s)",
-             this->rotation_, this->mirror_x_ ? "ON" : "OFF", 
-             this->mirror_y_ ? "ON" : "OFF");
   }
 
-  // ✅ NOUVEAU : Initialiser le mode direct si demandé
+  // ✅ Initialiser le mode direct si demandé
   if (this->direct_mode_) {
     if (!this->init_direct_mode_()) {
-      ESP_LOGE(TAG, "❌ Failed to initialize direct mode, falling back to canvas mode");
+      ESP_LOGE(TAG, "❌ Failed to initialize direct mode");
+      if (!this->canvas_obj_) {
+        ESP_LOGE(TAG, "❌ No canvas configured, cannot fallback");
+        this->mark_failed();
+        return;
+      }
+      ESP_LOGW(TAG, "⚠️  Falling back to canvas mode");
       this->direct_mode_ = false;
     } else {
       ESP_LOGI(TAG, "✅ Direct mode initialized");
@@ -351,6 +364,8 @@ void LVGLCameraDisplay::cleanup_v4l2_() {
 }
 
 bool LVGLCameraDisplay::init_ppa_() {
+  ESP_LOGI(TAG, "Initializing PPA...");
+  
   ppa_client_config_t ppa_config = {
     .oper_type = PPA_OPERATION_SRM,
     .max_pending_trans_num = 1,
@@ -370,22 +385,28 @@ bool LVGLCameraDisplay::init_ppa_() {
     std::swap(width, height);
   }
 
-  this->transform_buffer_size_ = width * height * 2;  // RGB565
-  this->transform_buffer_ = (uint8_t*)heap_caps_aligned_alloc(
-    64,
-    this->transform_buffer_size_,
-    MALLOC_CAP_SPIRAM
-  );
+  // ✅ Ne créer le transform_buffer que si on n'est PAS en mode direct
+  // En mode direct, PPA écrira directement dans le framebuffer LVGL
+  if (!this->direct_mode_) {
+    this->transform_buffer_size_ = width * height * 2;  // RGB565
+    this->transform_buffer_ = (uint8_t*)heap_caps_aligned_alloc(
+      64,
+      this->transform_buffer_size_,
+      MALLOC_CAP_SPIRAM
+    );
 
-  if (!this->transform_buffer_) {
-    ESP_LOGE(TAG, "Failed to allocate transform buffer");
-    ppa_unregister_client(this->ppa_handle_);
-    this->ppa_handle_ = nullptr;
-    return false;
+    if (!this->transform_buffer_) {
+      ESP_LOGE(TAG, "Failed to allocate transform buffer");
+      ppa_unregister_client(this->ppa_handle_);
+      this->ppa_handle_ = nullptr;
+      return false;
+    }
+
+    ESP_LOGI(TAG, "PPA transform buffer: %ux%u @ %u bytes", 
+             width, height, this->transform_buffer_size_);
+  } else {
+    ESP_LOGI(TAG, "PPA will write directly to LVGL framebuffer (no intermediate buffer)");
   }
-
-  ESP_LOGI(TAG, "PPA transform buffer: %ux%u @ %u bytes", 
-           width, height, this->transform_buffer_size_);
   
   return true;
 }
@@ -425,7 +446,7 @@ bool LVGLCameraDisplay::transform_frame_(const uint8_t *src, uint8_t *dst) {
                    ? this->width_ : this->height_;
   
   srm_config.out.buffer = dst;
-  srm_config.out.buffer_size = this->transform_buffer_size_;
+  srm_config.out.buffer_size = out_w * out_h * 2;  // RGB565
   srm_config.out.pic_w = out_w;
   srm_config.out.pic_h = out_h;
   srm_config.out.block_offset_x = 0;
@@ -452,7 +473,7 @@ bool LVGLCameraDisplay::transform_frame_(const uint8_t *src, uint8_t *dst) {
   return true;
 }
 
-// ✅ NOUVEAU : Initialiser le mode d'affichage direct
+// ✅ Initialiser le mode d'affichage direct
 bool LVGLCameraDisplay::init_direct_mode_() {
   ESP_LOGI(TAG, "Initializing direct display mode...");
   
@@ -488,15 +509,23 @@ bool LVGLCameraDisplay::init_direct_mode_() {
   
   this->lvgl_framebuffer_size_ = fb_width * fb_height * 2; // RGB565
   
+  // Vérifier l'alignement du framebuffer pour PPA
+  uintptr_t fb_addr = (uintptr_t)this->lvgl_framebuffer_;
+  if (fb_addr % 64 != 0) {
+    ESP_LOGW(TAG, "⚠️  Framebuffer not 64-byte aligned (%p), may impact PPA performance", 
+             this->lvgl_framebuffer_);
+  }
+  
   ESP_LOGI(TAG, "✅ Direct mode ready:");
   ESP_LOGI(TAG, "   Framebuffer: %p (%u bytes)", 
            this->lvgl_framebuffer_, this->lvgl_framebuffer_size_);
   ESP_LOGI(TAG, "   Resolution: %ux%u", fb_width, fb_height);
+  ESP_LOGI(TAG, "   Alignment: %s", (fb_addr % 64 == 0) ? "64-byte (optimal)" : "not optimal");
   
   return true;
 }
 
-// ✅ NOUVEAU : Mise à jour en mode direct (PPA → framebuffer LVGL)
+// ✅ Mise à jour en mode direct (PPA → framebuffer LVGL) - OPTIMISÉ
 void LVGLCameraDisplay::update_direct_mode_() {
   // Capturer une frame via V4L2
   uint8_t *frame_data = nullptr;
@@ -505,41 +534,63 @@ void LVGLCameraDisplay::update_direct_mode_() {
     return;
   }
 
-  if (!frame_data) {
+  if (!frame_data || !this->lvgl_framebuffer_) {
+    this->release_v4l2_frame_();
     return;
   }
 
-  // Déterminer le buffer de destination
-  uint8_t *dest_buffer = this->lvgl_framebuffer_;
+  // ✅ OPTIMISATION : Flux direct V4L2 → PPA → framebuffer LVGL
+  bool success = false;
   
-  // Si PPA activé et transformations nécessaires
   if (this->use_ppa_ && this->ppa_handle_ && 
       (this->rotation_ != ROTATION_0 || this->mirror_x_ || this->mirror_y_)) {
+    // PPA transforme directement vers le framebuffer LVGL
+    success = this->transform_frame_(frame_data, this->lvgl_framebuffer_);
     
-    // Utiliser PPA pour transformer directement vers le framebuffer
-    if (this->transform_frame_(frame_data, dest_buffer)) {
-      // Transformation réussie
+    if (success) {
+      // ✅ Synchroniser le cache pour que LVGL voit les données
+      esp_err_t ret = esp_cache_msync(
+        this->lvgl_framebuffer_, 
+        this->lvgl_framebuffer_size_,
+        ESP_CACHE_MSYNC_FLAG_DIR_M2C | ESP_CACHE_MSYNC_FLAG_UNALIGNED
+      );
+      if (ret != ESP_OK) {
+        ESP_LOGD(TAG, "Cache sync warning: 0x%x", ret);
+      }
     } else {
-      // Fallback: copie directe sans transformation
-      ESP_LOGW(TAG, "PPA transform failed, using direct copy");
-      memcpy(dest_buffer, frame_data, std::min(this->buffer_length_, this->lvgl_framebuffer_size_));
+      ESP_LOGW(TAG, "PPA transform failed");
     }
-  } else {
-    // Pas de transformation: copie directe
-    memcpy(dest_buffer, frame_data, std::min(this->buffer_length_, this->lvgl_framebuffer_size_));
+  }
+  
+  // Si PPA a échoué ou n'est pas utilisé, copie directe
+  if (!success) {
+    size_t copy_size = std::min(this->buffer_length_, this->lvgl_framebuffer_size_);
+    memcpy(this->lvgl_framebuffer_, frame_data, copy_size);
+    
+    // Synchroniser le cache
+    esp_cache_msync(
+      this->lvgl_framebuffer_, 
+      this->lvgl_framebuffer_size_,
+      ESP_CACHE_MSYNC_FLAG_DIR_M2C | ESP_CACHE_MSYNC_FLAG_UNALIGNED
+    );
   }
 
-  // Libérer la frame V4L2
+  // Libérer la frame V4L2 immédiatement
   this->release_v4l2_frame_();
 
-  // Invalider le framebuffer pour forcer le rafraîchissement LVGL
+  // ✅ Invalider uniquement la zone nécessaire dans LVGL
   lv_obj_invalidate(lv_scr_act());
   
   this->frame_count_++;
 }
 
-// Mode canvas (ancien mode)
+// Mode canvas (ancien mode - pour fallback)
 void LVGLCameraDisplay::update_canvas_mode_() {
+  if (!this->canvas_obj_) {
+    ESP_LOGW(TAG, "No canvas configured");
+    return;
+  }
+
   // Capturer une frame via V4L2
   uint8_t *frame_data = nullptr;
   if (!this->capture_v4l2_frame_(&frame_data)) {
@@ -571,18 +622,9 @@ void LVGLCameraDisplay::update_canvas_mode_() {
   }
 
   // Afficher sur le canvas LVGL
-  if (this->canvas_obj_) {
-    // Lock display avant update
-    lv_disp_t *disp = lv_obj_get_disp(this->canvas_obj_);
-    if (disp) {
-      _lv_disp_refr_timer(NULL);
-    }
-
-    // Update canvas
-    lv_canvas_set_buffer(this->canvas_obj_, display_buffer, 
-                         canvas_width, canvas_height, LV_IMG_CF_TRUE_COLOR);
-    lv_obj_invalidate(this->canvas_obj_);
-  }
+  lv_canvas_set_buffer(this->canvas_obj_, display_buffer, 
+                       canvas_width, canvas_height, LV_IMG_CF_TRUE_COLOR);
+  lv_obj_invalidate(this->canvas_obj_);
 
   // Re-queue le buffer V4L2
   this->release_v4l2_frame_();
@@ -611,7 +653,7 @@ void LVGLCameraDisplay::loop() {
     this->update_canvas_mode_();
   }
 
-  // Log FPS
+  // Log FPS périodique
   if (this->first_update_) {
     this->first_update_ = false;
     this->last_fps_time_ = now;
@@ -641,6 +683,10 @@ void LVGLCameraDisplay::dump_config() {
 #ifdef USE_ESP32_VARIANT_ESP32P4
   ESP_LOGCONFIG(TAG, "  V4L2 Device: %s", this->video_device_);
   ESP_LOGCONFIG(TAG, "  V4L2 FD: %d", this->video_fd_);
+  if (this->direct_mode_) {
+    ESP_LOGCONFIG(TAG, "  Framebuffer: %p (%u bytes)", 
+                  this->lvgl_framebuffer_, this->lvgl_framebuffer_size_);
+  }
 #endif
 }
 
