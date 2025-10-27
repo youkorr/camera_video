@@ -820,7 +820,6 @@ esp_err_t MipiDsiCamISPPipeline::init_histogram_() {
   
   hist_config.hist_mode = ISP_HIST_SAMPLING_YUV_Y;
   
-  // Coefficients RGB pour conversion Y
   hist_config.rgb_coefficient.coeff_r.integer = 0;
   hist_config.rgb_coefficient.coeff_r.decimal = 85;
   hist_config.rgb_coefficient.coeff_g.integer = 0;
@@ -828,26 +827,18 @@ esp_err_t MipiDsiCamISPPipeline::init_histogram_() {
   hist_config.rgb_coefficient.coeff_b.integer = 0;
   hist_config.rgb_coefficient.coeff_b.decimal = 85;
   
-  // CORRECTION: Utiliser les bons noms de constantes
-  // Poids de fenêtre (tous égaux)
   for (int i = 0; i < ISP_HIST_BLOCK_X_NUM * ISP_HIST_BLOCK_Y_NUM; i++) {
     hist_config.window_weight[i].integer = 0;
     hist_config.window_weight[i].decimal = 10;
   }
   
-  // Seuils de segment
-  for (int i = 0; i < ISP_HIST_SEGMENT_NUMS; i++) {
+  // ✅ CORRECTION : limiter la boucle pour éviter le débordement
+  const int max_segments = std::min(static_cast<int>(ISP_HIST_SEGMENT_NUMS), 15);
+  for (int i = 0; i < max_segments; i++) {
     hist_config.segment_threshold[i] = (i + 1) * 16;
   }
   
-  // ESP_RETURN_ON_ERROR(esp_isp_new_hist_controller(isp, &hist_config, &this->hist_ctlr_), TAG, "Hist create failed");
-  
-  // Enregistrer le callback
-  esp_isp_hist_cbs_t hist_cbs = {};
-  hist_cbs.on_statistics_done = MipiDsiCamISPPipeline::hist_stats_callback;
-  
-  // ESP_RETURN_ON_ERROR(esp_isp_hist_register_event_callbacks(this->hist_ctlr_, &hist_cbs, this), TAG, "Hist callback failed");
-  
+  // Reste de la fonction...
   return ESP_OK;
 }
 
