@@ -188,7 +188,7 @@ protected:
   // White Balance
   bool auto_white_balance_enabled_{false};
   float wb_red_gain_{1.0f};
-  float wb_green_gain_{1.0f};
+  float wb_green_gain_{0.7f};
   float wb_blue_gain_{1.0f};
   uint16_t wb_red_gain_fixed_{256};
   uint16_t wb_green_gain_fixed_{256};
