@@ -27,8 +27,8 @@ CONF_FRAMERATE = "framerate"
 CONF_JPEG_QUALITY = "jpeg_quality"
 CONF_ENABLE_V4L2 = "enable_v4l2"
 CONF_ENABLE_ISP_PIPELINE = "enable_isp_pipeline"
-CONF_ENABLE_JPEG_ENCODER = "enable_jpeg_encoder"
-CONF_ENABLE_H264_ENCODER = "enable_h264_encoder"
+#CONF_ENABLE_JPEG_ENCODER = "enable_jpeg_encoder"
+#CONF_ENABLE_H264_ENCODER = "enable_h264_encoder"
 
 PixelFormat = mipi_dsi_cam_ns.enum("PixelFormat")
 PIXEL_FORMAT_RGB565 = PixelFormat.PIXEL_FORMAT_RGB565
@@ -203,8 +203,8 @@ async def to_code(config):
     # ✅ CORRECTION: Récupérer les valeurs AVANT de les utiliser
     enable_v4l2 = config.get(CONF_ENABLE_V4L2, True)
     enable_isp = config.get(CONF_ENABLE_ISP_PIPELINE, True)
-    enable_jpeg = config.get(CONF_ENABLE_JPEG_ENCODER, False)
-    enable_h264 = config.get(CONF_ENABLE_H264_ENCODER, False)
+    #enable_jpeg = config.get(CONF_ENABLE_JPEG_ENCODER, False)
+    #enable_h264 = config.get(CONF_ENABLE_H264_ENCODER, False)
     
     # Toujours ajouter ces defines (toujours disponibles)
     cg.add_define("MIPI_DSI_CAM_ENABLE_V4L2")
@@ -217,13 +217,13 @@ async def to_code(config):
     if enable_isp:
         cg.add(var.set_enable_isp(True))
     
-    if enable_jpeg:
-        cg.add_define("MIPI_DSI_CAM_ENABLE_JPEG")
-        cg.add(var.set_enable_jpeg(True))
+    #if enable_jpeg:
+        #cg.add_define("MIPI_DSI_CAM_ENABLE_JPEG")
+        #cg.add(var.set_enable_jpeg(True))
     
-    if enable_h264:
-        cg.add_define("MIPI_DSI_CAM_ENABLE_H264")
-        cg.add(var.set_enable_h264(True))
+    #if enable_h264:
+        #cg.add_define("MIPI_DSI_CAM_ENABLE_H264")
+        #cg.add(var.set_enable_h264(True))
     
     # Générer le code des drivers
     import os
@@ -280,8 +280,8 @@ inline ISensorDriver* create_sensor_driver(const std::string& sensor_type, i2c::
     
     v4l2_msg = "enabled" if enable_v4l2 else "disabled"
     isp_msg = "enabled" if enable_isp else "disabled"
-    jpeg_msg = "enabled" if enable_jpeg else "disabled"
-    h264_msg = "enabled" if enable_h264 else "disabled"
+    #jpeg_msg = "enabled" if enable_jpeg else "disabled"
+    #h264_msg = "enabled" if enable_h264 else "disabled"
     
     cg.add(cg.RawExpression(f'''
         ESP_LOGI("compile", "Camera configuration:");
