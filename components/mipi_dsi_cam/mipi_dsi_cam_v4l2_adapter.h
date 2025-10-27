@@ -34,9 +34,13 @@ struct MipiCameraV4L2Context {
   uint32_t buffer_count;
   uint32_t queued_count;
   
+  // ✅ NOUVEAU : Système de séquence
+  uint32_t last_frame_sequence;  // Dernière séquence servie à l'application
+  
   // Statistiques
   uint32_t frame_count;
   uint32_t drop_count;
+  uint32_t total_dqbuf_calls;
 };
 
 // Structure pour les opérations V4L2
