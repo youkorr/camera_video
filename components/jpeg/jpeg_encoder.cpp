@@ -80,7 +80,6 @@ esp_err_t JPEGEncoder::init_internal_() {
     return ESP_OK;
   }
 
-  // Ouvrir le device JPEG
   this->jpeg_fd_ = open(ESP_VIDEO_JPEG_DEVICE_NAME, O_RDWR | O_NONBLOCK);
   if (this->jpeg_fd_ < 0) {
     ESP_LOGE(TAG, "Failed to open JPEG device %s", ESP_VIDEO_JPEG_DEVICE_NAME);
@@ -90,10 +89,9 @@ esp_err_t JPEGEncoder::init_internal_() {
   const uint32_t w = this->camera_->get_image_width();
   const uint32_t h = this->camera_->get_image_height();
 
-  // Buffers applicatifs
   struct esp_video_buffer_info buffer_info = {
     .count = 3,
-    .size = w * h * 2, // RGB565
+    .size = w * h * 2,
     .align_size = 64,
     .caps = (MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT),
     .memory_type = V4L2_MEMORY_USERPTR
@@ -107,7 +105,7 @@ esp_err_t JPEGEncoder::init_internal_() {
     return ESP_ERR_NO_MEM;
   }
 
-  buffer_info.size = w * h; // sortie JPEG
+  buffer_info.size = w * h;
   this->output_buffer_ = esp_video_buffer_create(&buffer_info);
   if (!this->output_buffer_) {
     ESP_LOGE(TAG, "Failed to create output buffer");
@@ -118,8 +116,14 @@ esp_err_t JPEGEncoder::init_internal_() {
     return ESP_ERR_NO_MEM;
   }
 
-  // Config formats
+  // ✅ Déclarer AVANT les goto
   struct v4l2_format in_fmt = {};
+  struct v4l2_format out_fmt = {};
+  struct v4l2_streamparm parm = {};
+  struct v4l2_requestbuffers req = {};
+  struct v4l2_control ctrl = {};
+
+  // Config input format
   in_fmt.type = V4L2_BUF_TYPE_VIDEO_OUTPUT;
   in_fmt.fmt.pix.width = w;
   in_fmt.fmt.pix.height = h;
@@ -130,7 +134,7 @@ esp_err_t JPEGEncoder::init_internal_() {
     goto fail;
   }
 
-  struct v4l2_format out_fmt = {};
+  // Config output format
   out_fmt.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
   out_fmt.fmt.pix.width = w;
   out_fmt.fmt.pix.height = h;
@@ -141,15 +145,13 @@ esp_err_t JPEGEncoder::init_internal_() {
     goto fail;
   }
 
-  // FPS si supporté
-  struct v4l2_streamparm parm = {};
+  // FPS (✅ correction .parm)
   parm.type = V4L2_BUF_TYPE_VIDEO_OUTPUT;
   parm.parm.output.timeperframe.numerator = 1;
   parm.parm.output.timeperframe.denominator = std::max<uint32_t>(1, this->camera_->get_fps());
   xioctl(this->jpeg_fd_, VIDIOC_S_PARM, &parm);
 
-  // Demande de buffers USERPTR
-  struct v4l2_requestbuffers req = {};
+  // Request buffers
   req.count = this->input_buffer_->info.count;
   req.type = V4L2_BUF_TYPE_VIDEO_OUTPUT;
   req.memory = V4L2_MEMORY_USERPTR;
@@ -165,7 +167,6 @@ esp_err_t JPEGEncoder::init_internal_() {
   }
 
   // Qualité JPEG
-  struct v4l2_control ctrl = {};
   ctrl.id = V4L2_CID_JPEG_COMPRESSION_QUALITY;
   ctrl.value = this->quality_;
   xioctl(this->jpeg_fd_, VIDIOC_S_CTRL, &ctrl);
