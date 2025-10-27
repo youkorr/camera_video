@@ -23,22 +23,17 @@ static bool s_vfs_registered = false;
 static void *s_vfs_ctx = nullptr;
 
 // ✅ FONCTION HELPER : Extraire device_num depuis un fd VFS
-// ESP-IDF encode le fd comme : (vfs_index << 12) | local_fd
-// On va utiliser local_fd comme device_num
 static int get_device_num_from_vfs_fd(int fd) {
     ESP_LOGI(TAG, "🔍 Looking for device: fd=%d", fd);
     
-    // Recherche dans tous les devices enregistrés
     for (int i = 0; i < 4; i++) {
         if (s_video_devices[i].video_device != nullptr) {
             ESP_LOGI(TAG, "✅ Found registered device at index %d", i);
-            // Retourner le premier device actif (normalement device 0 = /dev/video0)
             return i;
         }
     }
     
     ESP_LOGE(TAG, "❌ CRITICAL: No video device registered in VFS!");
-    ESP_LOGE(TAG, "   This means V4L2 adapter was not initialized properly");
     return -1;
 }
 
@@ -86,7 +81,6 @@ static void init_video_vfs() {
 static int video_open(const char *path, int flags, int mode) {
     ESP_LOGI(TAG, "VFS open: %s (flags=0x%x)", path, flags);
     
-    // Extraire le numéro de device depuis /videoN
     int device_num = -1;
     if (sscanf(path, "/video%d", &device_num) == 1) {
         if (device_num >= 0 && device_num < 4) {
@@ -96,8 +90,6 @@ static int video_open(const char *path, int flags, int mode) {
                 ESP_LOGI(TAG, "✅ Opening video%d -> returning fd=%d (refs=%d)", 
                          device_num, device_num, s_video_devices[device_num].ref_count);
                 
-                // ✅ IMPORTANT: Retourner directement device_num
-                // Le VFS va l'encoder, mais on pourra le retrouver dans les 12 bits bas
                 return device_num;
             }
         }
@@ -134,21 +126,8 @@ static ssize_t video_write(int fd, const void *src, size_t size) {
     return -1;
 }
 
-// Structure pour les opérations video
-struct esp_video_ops {
-    esp_err_t (*init)(void *video);
-    esp_err_t (*deinit)(void *video);
-    esp_err_t (*start)(void *video, uint32_t type);
-    esp_err_t (*stop)(void *video, uint32_t type);
-    esp_err_t (*enum_format)(void *video, uint32_t type, uint32_t index, uint32_t *pixel_format);
-    esp_err_t (*set_format)(void *video, const void *format);
-    esp_err_t (*get_format)(void *video, void *format);
-    esp_err_t (*reqbufs)(void *video, void *reqbufs);
-    esp_err_t (*querybuf)(void *video, void *buffer);
-    esp_err_t (*qbuf)(void *video, void *buffer);
-    esp_err_t (*dqbuf)(void *video, void *buffer);
-    esp_err_t (*querycap)(void *video, void *cap);
-};
+// ✅ SUPPRIMÉ : La redéfinition de struct esp_video_ops
+// Elle existe déjà dans esp_video_init.h
 
 #define IOCTL_TYPE(cmd) (((cmd) >> 8) & 0xFF)
 #define IOCTL_NR(cmd)   ((cmd) & 0xFF)
@@ -248,7 +227,6 @@ extern "C" esp_err_t esp_video_register_device(int device_id, void *video_device
     
     if (!s_vfs_registered) {
         init_video_vfs();
-        // ✅ Passer le contexte (notre tableau de devices)
         s_vfs_ctx = &s_video_devices;
         esp_err_t ret = esp_vfs_register("/dev", &video_vfs, s_vfs_ctx);
         if (ret != ESP_OK && ret != ESP_ERR_INVALID_STATE) {
