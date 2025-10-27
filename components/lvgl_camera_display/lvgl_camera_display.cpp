@@ -622,8 +622,8 @@ void LVGLCameraDisplay::update_canvas_mode_() {
   }
 
   // Afficher sur le canvas LVGL
-  //lv_canvas_set_buffer(this->canvas_obj_, display_buffer, 
-                       //canvas_width, canvas_height, LV_IMG_CF_TRUE_COLOR);
+  lv_canvas_set_buffer(this->canvas_obj_, display_buffer, 
+                       canvas_width, canvas_height, LV_IMG_CF_TRUE_COLOR);
   lv_obj_invalidate(this->canvas_obj_);
 
   // Re-queue le buffer V4L2
