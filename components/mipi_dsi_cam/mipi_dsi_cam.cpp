@@ -783,9 +783,13 @@ void MipiDsiCam::set_white_balance_gains(float red, float green, float blue) {
   this->wb_green_gain_ = green;
   this->wb_blue_gain_ = blue;
   
+  // Mettre à jour les valeurs fixed point
+  this->wb_red_gain_fixed_ = static_cast<uint16_t>(red * 256.0f);
+  this->wb_green_gain_fixed_ = static_cast<uint16_t>(green * 256.0f);
+  this->wb_blue_gain_fixed_ = static_cast<uint16_t>(blue * 256.0f);
+  
   // Pour les capteurs supportant la balance des blancs au niveau registre
   if (this->sensor_driver_ && (this->sensor_type_ == "sc202cs" || this->sensor_type_ == "sc2336")) {
-    // Appeler la méthode du driver si disponible
     ESP_LOGI(TAG, "WB gains: R=%.2f G=%.2f B=%.2f (logiciel uniquement)", red, green, blue);
   } else {
     ESP_LOGI(TAG, "WB gains: R=%.2f G=%.2f B=%.2f", red, green, blue);
