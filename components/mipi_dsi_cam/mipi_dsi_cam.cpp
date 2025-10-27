@@ -699,7 +699,6 @@ void MipiDsiCam::enable_isp_pipeline() {
   }
 }
 
-// ✅ Méthodes toujours présentes, mais ne font rien si les encodeurs ne sont pas compilés
 void MipiDsiCam::enable_jpeg_encoder(uint8_t quality) {
 #ifdef MIPI_DSI_CAM_ENABLE_JPEG
   if (this->jpeg_encoder_ != nullptr) {
@@ -708,18 +707,18 @@ void MipiDsiCam::enable_jpeg_encoder(uint8_t quality) {
   }
   
   ESP_LOGI(TAG, "Enabling JPEG encoder (quality=%u)...", quality);
-  this->jpeg_encoder_ = new MipiDsiCamJPEGEncoder(this);
+  MipiDsiCamJPEGEncoder *encoder = new MipiDsiCamJPEGEncoder(this);
   
-  esp_err_t ret = this->jpeg_encoder_->init(quality);
+  esp_err_t ret = encoder->init(quality);
   if (ret != ESP_OK) {
     ESP_LOGE(TAG, "Failed to initialize JPEG encoder: 0x%x", ret);
-    delete this->jpeg_encoder_;
-    this->jpeg_encoder_ = nullptr;
+    delete encoder;
   } else {
+    this->jpeg_encoder_ = encoder;
     ESP_LOGI(TAG, "✅ JPEG encoder enabled");
   }
 #else
-  (void)quality; // Éviter warning unused parameter
+  (void)quality;  // Éviter warning unused parameter
   ESP_LOGW(TAG, "JPEG encoder not compiled - enable in YAML config");
 #endif
 }
@@ -732,14 +731,14 @@ void MipiDsiCam::enable_h264_encoder(uint32_t bitrate, uint32_t gop_size) {
   }
   
   ESP_LOGI(TAG, "Enabling H264 encoder (bitrate=%u, gop=%u)...", bitrate, gop_size);
-  this->h264_encoder_ = new MipiDsiCamH264Encoder(this);
+  MipiDsiCamH264Encoder *encoder = new MipiDsiCamH264Encoder(this);
   
-  esp_err_t ret = this->h264_encoder_->init(bitrate, gop_size);
+  esp_err_t ret = encoder->init(bitrate, gop_size);
   if (ret != ESP_OK) {
     ESP_LOGE(TAG, "Failed to initialize H264 encoder: 0x%x", ret);
-    delete this->h264_encoder_;
-    this->h264_encoder_ = nullptr;
+    delete encoder;
   } else {
+    this->h264_encoder_ = encoder;
     ESP_LOGI(TAG, "✅ H264 encoder enabled");
   }
 #else
