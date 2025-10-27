@@ -468,9 +468,9 @@ esp_err_t MipiDsiCamV4L2Adapter::v4l2_dqbuf(void *video, void *buffer) {
     }
     ctx->frame_count++;
     
-    ESP_LOGD(TAG, "V4L2 dqbuf[%u]: %u bytes (frame %u, queued: %u/%u)", 
-             elem->index, copy_size, ctx->frame_count, 
-             ctx->queued_count, ctx->buffer_count);
+    //ESP_LOGD(TAG, "V4L2 dqbuf[%u]: %u bytes (frame %u, queued: %u/%u)", 
+             //elem->index, copy_size, ctx->frame_count, 
+             //ctx->queued_count, ctx->buffer_count);
     
     return ESP_OK;
 }
