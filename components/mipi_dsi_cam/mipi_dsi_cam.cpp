@@ -363,6 +363,7 @@ bool IRAM_ATTR MipiDsiCam::on_csi_frame_done_(
   
   if (trans->received_size > 0) {
     cam->frame_ready_ = true;
+    cam->frame_sequence_++;  // ✅ NOUVEAU : Incrémenter la séquence
     cam->buffer_index_ = (cam->buffer_index_ + 1) % 2;
     cam->total_frames_received_++;
   }
@@ -429,6 +430,51 @@ bool MipiDsiCam::capture_frame() {
   }
   
   return was_ready;
+}
+bool MipiDsiCam::acquire_frame(uint32_t last_served_sequence) {
+  // Vérifier s'il y a une nouvelle frame disponible
+  if (!this->streaming_) {
+    return false;
+  }
+  
+  // Attendre qu'une frame soit prête ET que ce soit une nouvelle
+  if (!this->frame_ready_) {
+    return false;
+  }
+  
+  // ✅ VÉRIFICATION CRITIQUE : nouvelle séquence ?
+  if (this->frame_sequence_ <= last_served_sequence) {
+    ESP_LOGV(TAG, "Same sequence: current=%u, last_served=%u", 
+             this->frame_sequence_, last_served_sequence);
+    return false;
+  }
+  
+  // Vérifier qu'aucune frame n'est déjà verrouillée
+  if (this->frame_locked_) {
+    ESP_LOGW(TAG, "Frame already locked (seq=%u)", this->locked_sequence_);
+    return false;
+  }
+  
+  // Verrouiller la frame actuelle
+  this->frame_ready_ = false;
+  this->frame_locked_ = true;
+  this->locked_sequence_ = this->frame_sequence_;
+  
+  // Pointer vers le dernier buffer écrit
+  uint8_t last_buffer = (this->buffer_index_ + 1) % 2;
+  this->current_frame_buffer_ = this->frame_buffers_[last_buffer];
+  
+  ESP_LOGV(TAG, "Frame acquired: seq=%u (was: %u)", 
+           this->locked_sequence_, last_served_sequence);
+  
+  return true;
+}
+
+void MipiDsiCam::release_frame() {
+  if (this->frame_locked_) {
+    this->frame_locked_ = false;
+    ESP_LOGV(TAG, "Frame released: seq=%u", this->locked_sequence_);
+  }
 }
 size_t MipiDsiCam::copy_frame_rgb565(uint8_t *dest, size_t max_size, bool apply_white_balance) {
   if (dest == nullptr || this->current_frame_buffer_ == nullptr) {
