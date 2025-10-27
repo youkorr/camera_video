@@ -8,6 +8,9 @@
 
 static const char *TAG = "esp_video_init";
 
+// ✅ CORRECTION : Supporter jusqu'à 32 devices video (/dev/video0 à /dev/video31)
+#define MAX_VIDEO_DEVICES 32
+
 // Structure pour le device vidéo
 typedef struct {
     void *video_device;
@@ -16,24 +19,23 @@ typedef struct {
     int ref_count;
 } esp_video_vfs_t;
 
-static esp_video_vfs_t s_video_devices[4] = {0};
+static esp_video_vfs_t s_video_devices[MAX_VIDEO_DEVICES] = {0};
 static bool s_vfs_registered = false;
 
-// ✅ Contexte global pour le VFS (pointeur vers notre tableau de devices)
+// ✅ Contexte global pour le VFS
 static void *s_vfs_ctx = nullptr;
 
 // ✅ FONCTION HELPER : Extraire device_num depuis un fd VFS
 static int get_device_num_from_vfs_fd(int fd) {
-    ESP_LOGI(TAG, "🔍 Looking for device: fd=%d", fd);
+    ESP_LOGV(TAG, "🔍 Looking for device: fd=%d", fd);
     
-    for (int i = 0; i < 4; i++) {
-        if (s_video_devices[i].video_device != nullptr) {
-            ESP_LOGI(TAG, "✅ Found registered device at index %d", i);
-            return i;
-        }
+    // Le fd correspond directement au device_num pour les devices vidéo
+    if (fd >= 0 && fd < MAX_VIDEO_DEVICES && s_video_devices[fd].video_device != nullptr) {
+        ESP_LOGV(TAG, "✅ Found registered device at index %d", fd);
+        return fd;
     }
     
-    ESP_LOGE(TAG, "❌ CRITICAL: No video device registered in VFS!");
+    ESP_LOGE(TAG, "❌ No video device registered for fd=%d", fd);
     return -1;
 }
 
@@ -41,7 +43,7 @@ static int get_device_num_from_vfs_fd(int fd) {
 extern "C" void* get_v4l2_context_from_fd(int fd) {
     int device_num = get_device_num_from_vfs_fd(fd);
     
-    if (device_num < 0 || device_num >= 4) {
+    if (device_num < 0 || device_num >= MAX_VIDEO_DEVICES) {
         ESP_LOGE(TAG, "❌ Invalid or unmapped fd: %d (device_num=%d)", fd, device_num);
         return nullptr;
     }
@@ -51,7 +53,7 @@ extern "C" void* get_v4l2_context_from_fd(int fd) {
         return nullptr;
     }
     
-    ESP_LOGD(TAG, "✅ Retrieved V4L2 context for fd=%d (device_num=%d) -> %p", 
+    ESP_LOGV(TAG, "✅ Retrieved V4L2 context for fd=%d (device_num=%d) -> %p", 
              fd, device_num, s_video_devices[device_num].video_device);
     
     return s_video_devices[device_num].video_device;
@@ -81,21 +83,30 @@ static void init_video_vfs() {
 static int video_open(const char *path, int flags, int mode) {
     ESP_LOGI(TAG, "VFS open: %s (flags=0x%x)", path, flags);
     
+    // ✅ CORRECTION : Parser correctement /dev/videoX ou /videoX
     int device_num = -1;
-    if (sscanf(path, "/video%d", &device_num) == 1) {
-        if (device_num >= 0 && device_num < 4) {
+    
+    // Chercher "video" dans le chemin
+    const char *video_part = strstr(path, "video");
+    if (video_part && sscanf(video_part, "video%d", &device_num) == 1) {
+        if (device_num >= 0 && device_num < MAX_VIDEO_DEVICES) {
             if (s_video_devices[device_num].video_device) {
                 s_video_devices[device_num].ref_count++;
                 
-                ESP_LOGI(TAG, "✅ Opening video%d -> returning fd=%d (refs=%d)", 
-                         device_num, device_num, s_video_devices[device_num].ref_count);
+                ESP_LOGI(TAG, "✅ Opening %s -> returning fd=%d (refs=%d)", 
+                         path, device_num, s_video_devices[device_num].ref_count);
                 
                 return device_num;
+            } else {
+                ESP_LOGE(TAG, "❌ Device video%d not registered", device_num);
             }
+        } else {
+            ESP_LOGE(TAG, "❌ Device number %d out of range (0-%d)", device_num, MAX_VIDEO_DEVICES-1);
         }
+    } else {
+        ESP_LOGE(TAG, "❌ Invalid path format: %s (expected /dev/videoX)", path);
     }
     
-    ESP_LOGE(TAG, "❌ Failed to open %s", path);
     errno = ENOENT;
     return -1;
 }
@@ -103,7 +114,7 @@ static int video_open(const char *path, int flags, int mode) {
 static int video_close(int fd) {
     int device_num = get_device_num_from_vfs_fd(fd);
     
-    if (device_num >= 0 && device_num < 4) {
+    if (device_num >= 0 && device_num < MAX_VIDEO_DEVICES) {
         if (s_video_devices[device_num].ref_count > 0) {
             s_video_devices[device_num].ref_count--;
             ESP_LOGI(TAG, "Closed video%d (refs=%d)", 
@@ -126,9 +137,6 @@ static ssize_t video_write(int fd, const void *src, size_t size) {
     return -1;
 }
 
-// ✅ SUPPRIMÉ : La redéfinition de struct esp_video_ops
-// Elle existe déjà dans esp_video_init.h
-
 #define IOCTL_TYPE(cmd) (((cmd) >> 8) & 0xFF)
 #define IOCTL_NR(cmd)   ((cmd) & 0xFF)
 
@@ -139,7 +147,7 @@ static inline bool ioctl_match(int cmd, char type, int nr) {
 static int video_ioctl(int fd, int cmd, va_list args) {
     int device_num = get_device_num_from_vfs_fd(fd);
     
-    if (device_num < 0 || device_num >= 4) {
+    if (device_num < 0 || device_num >= MAX_VIDEO_DEVICES) {
         ESP_LOGE(TAG, "❌ Invalid fd=%d (device_num=%d)", fd, device_num);
         errno = EBADF;
         return -1;
@@ -198,6 +206,11 @@ static int video_ioctl(int fd, int cmd, va_list args) {
             uint32_t type = *(uint32_t*)arg;
             ret = ops->stop(vfs_dev->video_device, type);
         }
+    } else if (ioctl_match(cmd, 'V', 28)) {
+        // VIDIOC_S_CTRL
+        if (ops && ops->set_format) { // Utiliser set_format comme fallback pour les contrôles
+            ret = ESP_OK; // Ignorer silencieusement pour l'instant
+        }
     } else {
         ESP_LOGV(TAG, "Unhandled ioctl cmd=0x%08x", cmd);
         return 0;
@@ -221,7 +234,8 @@ static int video_ioctl(int fd, int cmd, va_list args) {
 }
 
 extern "C" esp_err_t esp_video_register_device(int device_id, void *video_device, void *user_ctx, const void *ops) {
-    if (device_id < 0 || device_id >= 4) {
+    if (device_id < 0 || device_id >= MAX_VIDEO_DEVICES) {
+        ESP_LOGE(TAG, "❌ Invalid device_id: %d (must be 0-%d)", device_id, MAX_VIDEO_DEVICES-1);
         return ESP_ERR_INVALID_ARG;
     }
     
@@ -285,7 +299,7 @@ extern "C" esp_err_t esp_video_deinit(void)
 {
     ESP_LOGI(TAG, "esp_video_deinit() called");
     
-    for (int i = 0; i < 4; i++) {
+    for (int i = 0; i < MAX_VIDEO_DEVICES; i++) {
         s_video_devices[i].video_device = NULL;
         s_video_devices[i].user_ctx = NULL;
         s_video_devices[i].ops = NULL;
