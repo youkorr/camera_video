@@ -15,6 +15,8 @@
 
 #ifdef USE_ESP32_VARIANT_ESP32P4
 
+#include "../mipi_dsi_cam/mipi_dsi_cam_video_devices.h"
+
 // ✅ AJOUT : Déclaration des fonctions de création des devices
 extern "C" {
   esp_err_t mipi_dsi_cam_video_init(void);
