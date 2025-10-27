@@ -430,7 +430,154 @@ bool MipiDsiCam::capture_frame() {
   
   return was_ready;
 }
+size_t MipiDsiCam::copy_frame_rgb565(uint8_t *dest, size_t max_size, bool apply_white_balance) {
+  if (dest == nullptr || this->current_frame_buffer_ == nullptr) {
+    return 0;
+  }
 
+  size_t copy_size = std::min(max_size, this->frame_buffer_size_);
+  copy_size &= ~static_cast<size_t>(1);
+  if (copy_size == 0) {
+    return 0;
+  }
+
+  const uint8_t *src = this->current_frame_buffer_;
+
+  if (!apply_white_balance) {
+    std::memcpy(dest, src, copy_size);
+    return copy_size;
+  }
+
+  const uint16_t red_gain = this->wb_red_gain_fixed_;
+  const uint16_t green_gain = this->wb_green_gain_fixed_;
+  const uint16_t blue_gain = this->wb_blue_gain_fixed_;
+
+  if (red_gain == 256 && green_gain == 256 && blue_gain == 256) {
+    std::memcpy(dest, src, copy_size);
+    return copy_size;
+  }
+
+  auto apply_gain = [](uint16_t value, uint16_t gain) -> uint16_t {
+    uint32_t scaled = (static_cast<uint32_t>(value) * gain + 128) >> 8;
+    if (scaled > 255) {
+      scaled = 255;
+    }
+    return static_cast<uint16_t>(scaled);
+  };
+
+  for (size_t offset = 0; offset < copy_size; offset += 2) {
+    uint16_t pixel = static_cast<uint16_t>(src[offset]) |
+                     (static_cast<uint16_t>(src[offset + 1]) << 8);
+
+    uint8_t r5 = (pixel >> 11) & 0x1F;
+    uint8_t g6 = (pixel >> 5) & 0x3F;
+    uint8_t b5 = pixel & 0x1F;
+
+    uint16_t r8 = (static_cast<uint16_t>(r5) << 3) | (r5 >> 2);
+    uint16_t g8 = (static_cast<uint16_t>(g6) << 2) | (g6 >> 4);
+    uint16_t b8 = (static_cast<uint16_t>(b5) << 3) | (b5 >> 2);
+
+    r8 = apply_gain(r8, red_gain);
+    g8 = apply_gain(g8, green_gain);
+    b8 = apply_gain(b8, blue_gain);
+
+    uint16_t corrected = (static_cast<uint16_t>(r8 >> 3) << 11) |
+                         (static_cast<uint16_t>(g8 >> 2) << 5) |
+                         static_cast<uint16_t>(b8 >> 3);
+
+    dest[offset] = static_cast<uint8_t>(corrected & 0xFF);
+    dest[offset + 1] = static_cast<uint8_t>(corrected >> 8);
+  }
+
+  return copy_size;
+}
+
+void MipiDsiCam::set_auto_white_balance(bool enable) {
+  this->auto_white_balance_enabled_ = enable;
+  this->last_awb_update_ = millis();
+  ESP_LOGI(TAG, "Software auto white balance: %s", enable ? "ENABLED" : "DISABLED");
+}
+
+void MipiDsiCam::update_auto_white_balance_() {
+  if (!this->auto_white_balance_enabled_ || this->current_frame_buffer_ == nullptr) {
+    return;
+  }
+
+  uint32_t now = millis();
+  if (now - this->last_awb_update_ < 400) {
+    return;
+  }
+  this->last_awb_update_ = now;
+
+  if (this->width_ == 0 || this->height_ == 0) {
+    return;
+  }
+
+  const size_t step_x = std::max<uint16_t>(4, this->width_ / 16);
+  const size_t step_y = std::max<uint16_t>(4, this->height_ / 16);
+  const uint8_t *buffer = this->current_frame_buffer_;
+
+  uint32_t sum_r = 0;
+  uint32_t sum_g = 0;
+  uint32_t sum_b = 0;
+  uint32_t samples = 0;
+
+  for (size_t y = step_y; y < this->height_ - step_y; y += step_y) {
+    for (size_t x = step_x; x < this->width_ - step_x; x += step_x) {
+      size_t index = (y * this->width_ + x) * 2;
+      if (index + 1 >= this->frame_buffer_size_) {
+        continue;
+      }
+
+      uint16_t pixel = static_cast<uint16_t>(buffer[index]) |
+                       (static_cast<uint16_t>(buffer[index + 1]) << 8);
+
+      uint8_t r5 = (pixel >> 11) & 0x1F;
+      uint8_t g6 = (pixel >> 5) & 0x3F;
+      uint8_t b5 = pixel & 0x1F;
+
+      sum_r += (static_cast<uint16_t>(r5) << 3) | (r5 >> 2);
+      sum_g += (static_cast<uint16_t>(g6) << 2) | (g6 >> 4);
+      sum_b += (static_cast<uint16_t>(b5) << 3) | (b5 >> 2);
+      samples++;
+    }
+  }
+
+  if (samples == 0) {
+    return;
+  }
+
+  float avg_r = static_cast<float>(sum_r) / static_cast<float>(samples);
+  float avg_g = static_cast<float>(sum_g) / static_cast<float>(samples);
+  float avg_b = static_cast<float>(sum_b) / static_cast<float>(samples);
+
+  float target = (avg_r + avg_g + avg_b) / 3.0f;
+  if (target < 1.0f) {
+    return;
+  }
+
+  auto adjust_gain = [](float current, float channel_avg, float reference) -> float {
+    if (channel_avg < 1.0f) {
+      channel_avg = 1.0f;
+    }
+    float desired = current * (reference / channel_avg);
+    desired = std::clamp(desired, 0.5f, 3.0f);
+    constexpr float smoothing = 0.12f;
+    return current * (1.0f - smoothing) + desired * smoothing;
+  };
+
+  float new_red = adjust_gain(this->wb_red_gain_, avg_r, target);
+  float new_green = adjust_gain(this->wb_green_gain_, avg_g, target);
+  float new_blue = adjust_gain(this->wb_blue_gain_, avg_b, target);
+
+  if (std::fabs(new_red - this->wb_red_gain_) < 0.01f &&
+      std::fabs(new_green - this->wb_green_gain_) < 0.01f &&
+      std::fabs(new_blue - this->wb_blue_gain_) < 0.01f) {
+    return;
+  }
+
+  this->set_white_balance_gains(new_red, new_green, new_blue, true);
+}
 void MipiDsiCam::update_auto_exposure_() {
   if (!this->auto_exposure_enabled_ || !this->sensor_driver_) {
     return;
