@@ -14,6 +14,23 @@ extern "C" {
 }
 #endif
 
+// Forward declarations pour encodeurs
+#ifdef MIPI_DSI_CAM_ENABLE_JPEG
+namespace esphome { 
+namespace mipi_dsi_cam { 
+class MipiDsiCamJPEGEncoder; 
+}
+}
+#endif
+
+#ifdef MIPI_DSI_CAM_ENABLE_H264
+namespace esphome { 
+namespace mipi_dsi_cam { 
+class MipiDsiCamH264Encoder; 
+}
+}
+#endif
+
 // Forward declarations pour V4L2 et ISP - TOUJOURS disponibles
 namespace esphome {
 namespace mipi_dsi_cam {
@@ -76,14 +93,18 @@ class MipiDsiCam : public Component, public i2c::I2CDevice {
   void set_jpeg_quality(uint8_t quality) { this->jpeg_quality_ = quality; }
   void set_framerate(uint8_t fps) { this->framerate_ = fps; }
 
-  // NOUVEAUX setters pour activer V4L2/ISP au démarrage
+  // NOUVEAUX setters pour activer V4L2/ISP/Encodeurs au démarrage
   void set_enable_v4l2(bool enable) { this->enable_v4l2_on_setup_ = enable; }
   void set_enable_isp(bool enable) { this->enable_isp_on_setup_ = enable; }
+  void set_enable_jpeg(bool enable) { this->enable_jpeg_on_setup_ = enable; }
+  void set_enable_h264(bool enable) { this->enable_h264_on_setup_ = enable; }
 
   bool capture_frame();
   bool start_streaming();
   bool stop_streaming();
   bool is_streaming() const { return this->streaming_; }
+  
+  uint8_t get_fps() const;
   
   uint8_t* get_image_data() { return this->current_frame_buffer_; }
   size_t get_image_size() const { return this->frame_buffer_size_; }
@@ -109,6 +130,17 @@ class MipiDsiCam : public Component, public i2c::I2CDevice {
   
   MipiDsiCamV4L2Adapter* get_v4l2_adapter() { return this->v4l2_adapter_; }
   MipiDsiCamISPPipeline* get_isp_pipeline() { return this->isp_pipeline_; }
+  
+  // Encodeurs JPEG et H264
+#ifdef MIPI_DSI_CAM_ENABLE_JPEG
+  void enable_jpeg_encoder(uint8_t quality = 80);
+  MipiDsiCamJPEGEncoder* get_jpeg_encoder() { return this->jpeg_encoder_; }
+#endif
+
+#ifdef MIPI_DSI_CAM_ENABLE_H264
+  void enable_h264_encoder(uint32_t bitrate = 2000000, uint32_t gop_size = 30);
+  MipiDsiCamH264Encoder* get_h264_encoder() { return this->h264_encoder_; }
+#endif
 
  protected:
   int8_t external_clock_pin_{-1};
@@ -132,12 +164,15 @@ class MipiDsiCam : public Component, public i2c::I2CDevice {
   bool streaming_{false};
   bool frame_ready_{false};
   
-  // Flags pour activer V4L2/ISP au démarrage
+  // Flags pour activer V4L2/ISP/Encodeurs au démarrage
   bool enable_v4l2_on_setup_{false};
   bool enable_isp_on_setup_{false};
+  bool enable_jpeg_on_setup_{false};
+  bool enable_h264_on_setup_{false};
   
   uint32_t total_frames_received_{0};
   uint32_t last_frame_log_time_{0};
+  uint32_t drop_count_{0};
   
   uint8_t *frame_buffers_[2]{nullptr, nullptr};
   uint8_t *current_frame_buffer_{nullptr};
@@ -161,6 +196,15 @@ class MipiDsiCam : public Component, public i2c::I2CDevice {
   // Adaptateurs V4L2 et ISP - TOUJOURS disponibles
   MipiDsiCamV4L2Adapter *v4l2_adapter_{nullptr};
   MipiDsiCamISPPipeline *isp_pipeline_{nullptr};
+  
+  // Encodeurs
+#ifdef MIPI_DSI_CAM_ENABLE_JPEG
+  MipiDsiCamJPEGEncoder *jpeg_encoder_{nullptr};
+#endif
+
+#ifdef MIPI_DSI_CAM_ENABLE_H264
+  MipiDsiCamH264Encoder *h264_encoder_{nullptr};
+#endif
   
 #ifdef USE_ESP32_VARIANT_ESP32P4
   esp_cam_ctlr_handle_t csi_handle_{nullptr};
