@@ -89,20 +89,25 @@ class MipiDsiCam : public Component, public i2c::I2CDevice {
   size_t get_image_size() const { return this->frame_buffer_size_; }
   uint16_t get_image_width() const { return this->width_; }
   uint16_t get_image_height() const { return this->height_; }
+  uint8_t get_fps() const { return this->framerate_; }
   std::string get_name() const { return this->name_; }
   
   bool has_external_clock() const { return this->external_clock_pin_ >= 0; }
 
-  // Auto Exposure et White Balance
+  // Auto Exposure
   void set_auto_exposure(bool enabled);
   void set_ae_target_brightness(uint8_t target);
   void set_manual_exposure(uint16_t exposure);
   void set_manual_gain(uint8_t gain_index);
-  void set_white_balance_gains(float red, float green, float blue);
-  void set_white_balance_gains(float red, float green, float blue, bool silent = false);
   void adjust_exposure(uint16_t exposure_value);
   void adjust_gain(uint8_t gain_index);
   void set_brightness_level(uint8_t level);
+  
+  // White Balance
+  void set_white_balance_gains(float red, float green, float blue);
+  void set_white_balance_gains(float red, float green, float blue, bool silent);
+  void set_auto_white_balance(bool enable);
+  size_t copy_frame_rgb565(uint8_t *dest, size_t max_size, bool apply_white_balance = false);
 
   // Interface V4L2 et ISP Pipeline - TOUJOURS disponibles
   void enable_v4l2_adapter();
@@ -154,16 +159,15 @@ class MipiDsiCam : public Component, public i2c::I2CDevice {
   uint32_t ae_target_brightness_{128};
   uint32_t last_ae_update_{0};
   
-  // White Balance correction
-  float wb_red_gain_{1.3f};
-  float wb_green_gain_{0.9f};
-  float wb_blue_gain_{1.1f};
+  // White Balance correction (software)
   float wb_red_gain_{1.0f};
   float wb_green_gain_{1.0f};
   float wb_blue_gain_{1.0f};
   uint16_t wb_red_gain_fixed_{256};
   uint16_t wb_green_gain_fixed_{256};
   uint16_t wb_blue_gain_fixed_{256};
+  bool auto_white_balance_enabled_{false};
+  uint32_t last_awb_update_{0};
 
   // Adaptateurs V4L2 et ISP - TOUJOURS disponibles
   MipiDsiCamV4L2Adapter *v4l2_adapter_{nullptr};
@@ -185,6 +189,7 @@ class MipiDsiCam : public Component, public i2c::I2CDevice {
   
   void configure_white_balance_();
   void update_auto_exposure_();
+  void update_auto_white_balance_();
   uint32_t calculate_brightness_();
   
   static bool IRAM_ATTR on_csi_new_frame_(
