@@ -99,6 +99,7 @@ class MipiDsiCam : public Component, public i2c::I2CDevice {
   void set_manual_exposure(uint16_t exposure);
   void set_manual_gain(uint8_t gain_index);
   void set_white_balance_gains(float red, float green, float blue);
+  void set_white_balance_gains(float red, float green, float blue, bool silent = false);
   void adjust_exposure(uint16_t exposure_value);
   void adjust_gain(uint8_t gain_index);
   void set_brightness_level(uint8_t level);
@@ -157,6 +158,12 @@ class MipiDsiCam : public Component, public i2c::I2CDevice {
   float wb_red_gain_{1.3f};
   float wb_green_gain_{0.9f};
   float wb_blue_gain_{1.1f};
+  float wb_red_gain_{1.0f};
+  float wb_green_gain_{1.0f};
+  float wb_blue_gain_{1.0f};
+  uint16_t wb_red_gain_fixed_{256};
+  uint16_t wb_green_gain_fixed_{256};
+  uint16_t wb_blue_gain_fixed_{256};
 
   // Adaptateurs V4L2 et ISP - TOUJOURS disponibles
   MipiDsiCamV4L2Adapter *v4l2_adapter_{nullptr};
