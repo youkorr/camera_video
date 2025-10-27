@@ -16,9 +16,6 @@ extern "C" esp_err_t esp_video_register_device(int device_id, void *video_device
 namespace esphome {
 namespace mipi_dsi_cam {
 
-struct esp_video_buffer;
-struct esp_video_buffer_element;
-
 // Structure complète pour le contexte V4L2
 struct MipiCameraV4L2Context {
   MipiDsiCam *camera;
@@ -37,7 +34,6 @@ struct MipiCameraV4L2Context {
   uint32_t buffer_count;
   uint32_t queued_count;
   
-
   // Statistiques
   uint32_t frame_count;
   uint32_t drop_count;
@@ -57,14 +53,11 @@ struct esp_video_ops {
   esp_err_t (*qbuf)(void *video, void *buffer);
   esp_err_t (*dqbuf)(void *video, void *buffer);
   esp_err_t (*querycap)(void *video, void *cap);
-  // Suivi des frames pour éviter les doublons entre consommateurs
-  uint32_t last_frame_sequence;
 };
 
 /**
  * @brief Adaptateur V4L2 pour mipi_dsi_cam
  * 
- *
  * Implémentation complète de l'interface V4L2 standard
  */
 class MipiDsiCamV4L2Adapter {
