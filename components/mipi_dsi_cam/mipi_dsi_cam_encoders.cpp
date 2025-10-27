@@ -1,7 +1,6 @@
-// mipi_dsi_cam_encoders.cpp
-// Compat V4L2 userland (ESP32-P4 / ESPHome) – JPEG & H.264 encoders
 
 #include "mipi_dsi_cam_encoders.h"
+#include "mipi_dsi_cam.h"
 #include "esphome/core/log.h"
 
 #include <fcntl.h>
