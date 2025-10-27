@@ -778,15 +778,16 @@ void MipiDsiCam::set_manual_gain(uint8_t gain_index) {
   }
 }
 
-void MipiDsiCam::set_white_balance_gains(float red, float green, float blue) {
+void MipiDsiCam::set_white_balance_gains(float red, float green, float blue, bool update_fixed) {
   this->wb_red_gain_ = red;
   this->wb_green_gain_ = green;
   this->wb_blue_gain_ = blue;
   
-  // Mettre à jour les valeurs fixed point
-  this->wb_red_gain_fixed_ = static_cast<uint16_t>(red * 256.0f);
-  this->wb_green_gain_fixed_ = static_cast<uint16_t>(green * 256.0f);
-  this->wb_blue_gain_fixed_ = static_cast<uint16_t>(blue * 256.0f);
+  if (update_fixed) {
+    this->wb_red_gain_fixed_ = static_cast<uint16_t>(red * 256.0f);
+    this->wb_green_gain_fixed_ = static_cast<uint16_t>(green * 256.0f);
+    this->wb_blue_gain_fixed_ = static_cast<uint16_t>(blue * 256.0f);
+  }
   
   // Pour les capteurs supportant la balance des blancs au niveau registre
   if (this->sensor_driver_ && (this->sensor_type_ == "sc202cs" || this->sensor_type_ == "sc2336")) {
