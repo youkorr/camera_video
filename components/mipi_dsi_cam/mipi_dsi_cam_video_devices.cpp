@@ -1,6 +1,7 @@
 #include "mipi_dsi_cam_video_devices.h"
 #include "esp_video_init.h"
 #include "esp_video_device.h"
+#include "videodev2.h"  // ✅ AJOUT : pour v4l2_format
 #include "esphome/core/log.h"
 
 #ifdef USE_ESP32_VARIANT_ESP32P4
@@ -34,6 +35,11 @@ static esp_err_t jpeg_init(void *video) {
   return ESP_OK;
 }
 
+static esp_err_t jpeg_deinit(void *video) {
+  ESP_LOGI(TAG, "JPEG encoder deinit");
+  return ESP_OK;
+}
+
 static esp_err_t jpeg_start(void *video, uint32_t type) {
   JPEGDeviceContext *ctx = (JPEGDeviceContext*)video;
   ctx->streaming = true;
@@ -59,25 +65,79 @@ static esp_err_t jpeg_set_format(void *video, const void *format) {
   return ESP_OK;
 }
 
+static esp_err_t jpeg_get_format(void *video, void *format) {
+  JPEGDeviceContext *ctx = (JPEGDeviceContext*)video;
+  struct v4l2_format *fmt = (struct v4l2_format*)format;
+  
+  if (fmt->type != V4L2_BUF_TYPE_VIDEO_CAPTURE) {
+    return ESP_ERR_NOT_SUPPORTED;
+  }
+  
+  fmt->fmt.pix.width = ctx->width;
+  fmt->fmt.pix.height = ctx->height;
+  fmt->fmt.pix.pixelformat = V4L2_PIX_FMT_JPEG;
+  fmt->fmt.pix.field = V4L2_FIELD_NONE;
+  fmt->fmt.pix.bytesperline = 0;
+  fmt->fmt.pix.sizeimage = ctx->width * ctx->height;
+  
+  return ESP_OK;
+}
+
+static esp_err_t jpeg_querycap(void *video, void *cap) {
+  struct v4l2_capability *capability = (struct v4l2_capability*)cap;
+  
+  memset(capability, 0, sizeof(*capability));
+  strncpy((char*)capability->driver, "esp_jpeg", sizeof(capability->driver) - 1);
+  strncpy((char*)capability->card, "ESP JPEG Encoder", sizeof(capability->card) - 1);
+  strncpy((char*)capability->bus_info, "platform:esp-jpeg", sizeof(capability->bus_info) - 1);
+  
+  capability->version = 0x00010000;
+  capability->capabilities = V4L2_CAP_VIDEO_CAPTURE | V4L2_CAP_STREAMING;
+  capability->device_caps = capability->capabilities;
+  
+  return ESP_OK;
+}
+
+// ✅ Déclaration AVANT utilisation
+struct esp_video_ops {
+  esp_err_t (*init)(void *video);
+  esp_err_t (*deinit)(void *video);
+  esp_err_t (*start)(void *video, uint32_t type);
+  esp_err_t (*stop)(void *video, uint32_t type);
+  esp_err_t (*enum_format)(void *video, uint32_t type, uint32_t index, uint32_t *pixel_format);
+  esp_err_t (*set_format)(void *video, const void *format);
+  esp_err_t (*get_format)(void *video, void *format);
+  esp_err_t (*reqbufs)(void *video, void *reqbufs);
+  esp_err_t (*querybuf)(void *video, void *buffer);
+  esp_err_t (*qbuf)(void *video, void *buffer);
+  esp_err_t (*dqbuf)(void *video, void *buffer);
+  esp_err_t (*querycap)(void *video, void *cap);
+};
+
 // Table des opérations JPEG
 static const esp_video_ops jpeg_ops = {
   .init = jpeg_init,
-  .deinit = nullptr,
+  .deinit = jpeg_deinit,
   .start = jpeg_start,
   .stop = jpeg_stop,
   .enum_format = nullptr,
   .set_format = jpeg_set_format,
-  .get_format = nullptr,
+  .get_format = jpeg_get_format,
   .reqbufs = nullptr,
   .querybuf = nullptr,
   .qbuf = nullptr,
   .dqbuf = nullptr,
-  .querycap = nullptr,
+  .querycap = jpeg_querycap,
 };
 
-// ===== Callbacks H.264 (similaire) =====
+// ===== Callbacks H.264 =====
 static esp_err_t h264_init(void *video) {
   ESP_LOGI(TAG, "H.264 encoder init");
+  return ESP_OK;
+}
+
+static esp_err_t h264_deinit(void *video) {
+  ESP_LOGI(TAG, "H.264 encoder deinit");
   return ESP_OK;
 }
 
@@ -95,19 +155,64 @@ static esp_err_t h264_stop(void *video, uint32_t type) {
   return ESP_OK;
 }
 
+static esp_err_t h264_set_format(void *video, const void *format) {
+  H264DeviceContext *ctx = (H264DeviceContext*)video;
+  const struct v4l2_format *fmt = (const struct v4l2_format*)format;
+  
+  ctx->width = fmt->fmt.pix.width;
+  ctx->height = fmt->fmt.pix.height;
+  
+  ESP_LOGI(TAG, "H.264 format: %ux%u", ctx->width, ctx->height);
+  return ESP_OK;
+}
+
+static esp_err_t h264_get_format(void *video, void *format) {
+  H264DeviceContext *ctx = (H264DeviceContext*)video;
+  struct v4l2_format *fmt = (struct v4l2_format*)format;
+  
+  if (fmt->type != V4L2_BUF_TYPE_VIDEO_CAPTURE) {
+    return ESP_ERR_NOT_SUPPORTED;
+  }
+  
+  fmt->fmt.pix.width = ctx->width;
+  fmt->fmt.pix.height = ctx->height;
+  fmt->fmt.pix.pixelformat = V4L2_PIX_FMT_H264;
+  fmt->fmt.pix.field = V4L2_FIELD_NONE;
+  fmt->fmt.pix.bytesperline = 0;
+  fmt->fmt.pix.sizeimage = ctx->width * ctx->height;
+  
+  return ESP_OK;
+}
+
+static esp_err_t h264_querycap(void *video, void *cap) {
+  struct v4l2_capability *capability = (struct v4l2_capability*)cap;
+  
+  memset(capability, 0, sizeof(*capability));
+  strncpy((char*)capability->driver, "esp_h264", sizeof(capability->driver) - 1);
+  strncpy((char*)capability->card, "ESP H.264 Encoder", sizeof(capability->card) - 1);
+  strncpy((char*)capability->bus_info, "platform:esp-h264", sizeof(capability->bus_info) - 1);
+  
+  capability->version = 0x00010000;
+  capability->capabilities = V4L2_CAP_VIDEO_CAPTURE | V4L2_CAP_STREAMING;
+  capability->device_caps = capability->capabilities;
+  
+  return ESP_OK;
+}
+
+// Table des opérations H.264
 static const esp_video_ops h264_ops = {
   .init = h264_init,
-  .deinit = nullptr,
+  .deinit = h264_deinit,
   .start = h264_start,
   .stop = h264_stop,
   .enum_format = nullptr,
-  .set_format = nullptr,
-  .get_format = nullptr,
+  .set_format = h264_set_format,
+  .get_format = h264_get_format,
   .reqbufs = nullptr,
   .querybuf = nullptr,
   .qbuf = nullptr,
   .dqbuf = nullptr,
-  .querycap = nullptr,
+  .querycap = h264_querycap,
 };
 
 // ===== API Publique =====
@@ -125,6 +230,9 @@ esp_err_t mipi_dsi_cam_video_init(void) {
 esp_err_t mipi_dsi_cam_create_jpeg_device(void *user_ctx) {
   s_jpeg_ctx.user_ctx = user_ctx;
   s_jpeg_ctx.quality = 80;
+  s_jpeg_ctx.width = 1280;
+  s_jpeg_ctx.height = 720;
+  s_jpeg_ctx.streaming = false;
   
   esp_err_t ret = esp_video_register_device(
     ESP_VIDEO_JPEG_DEVICE_ID,
@@ -135,6 +243,8 @@ esp_err_t mipi_dsi_cam_create_jpeg_device(void *user_ctx) {
   
   if (ret == ESP_OK) {
     ESP_LOGI(TAG, "✅ Created /dev/video%d (JPEG)", ESP_VIDEO_JPEG_DEVICE_ID);
+  } else {
+    ESP_LOGE(TAG, "❌ Failed to create JPEG device: 0x%x", ret);
   }
   
   return ret;
@@ -144,6 +254,9 @@ esp_err_t mipi_dsi_cam_create_h264_device(bool high_profile) {
   s_h264_ctx.high_profile = high_profile;
   s_h264_ctx.bitrate = 2000000;
   s_h264_ctx.gop_size = 30;
+  s_h264_ctx.width = 1280;
+  s_h264_ctx.height = 720;
+  s_h264_ctx.streaming = false;
   
   esp_err_t ret = esp_video_register_device(
     ESP_VIDEO_H264_DEVICE_ID,
@@ -154,6 +267,8 @@ esp_err_t mipi_dsi_cam_create_h264_device(bool high_profile) {
   
   if (ret == ESP_OK) {
     ESP_LOGI(TAG, "✅ Created /dev/video%d (H.264)", ESP_VIDEO_H264_DEVICE_ID);
+  } else {
+    ESP_LOGE(TAG, "❌ Failed to create H.264 device: 0x%x", ret);
   }
   
   return ret;
