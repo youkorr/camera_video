@@ -1,12 +1,8 @@
 #pragma once
 
-#ifdef MIPI_DSI_CAM_ENABLE_JPEG
-#ifdef MIPI_DSI_CAM_ENABLE_H264
-
 #include "esphome/core/component.h"
 #include "esp_video_buffer.h"
 #include <fcntl.h>
-//#include <sys/ioctl.h>
 #include "../lvgl_camera_display/ioctl.h"
 #include "videodev2.h"
 
@@ -25,6 +21,7 @@ class MipiDsiCam;
 // ========================================
 // JPEG Encoder avec esp_video_buffer
 // ========================================
+#ifdef MIPI_DSI_CAM_ENABLE_JPEG
 class MipiDsiCamJPEGEncoder {
  public:
   MipiDsiCamJPEGEncoder(MipiDsiCam *camera);
@@ -58,17 +55,18 @@ class MipiDsiCamJPEGEncoder {
   struct esp_video_buffer *input_buffer_{nullptr};
   struct esp_video_buffer *output_buffer_{nullptr};
   
-  uint8_t *jpeg_buffer_{nullptr};
-  size_t jpeg_buffer_size_{0};
+  bool streaming_started_out_{false};
+  bool streaming_started_cap_{false};
   
-  bool setup_v4l2_buffers_();
   esp_err_t encode_internal_(const uint8_t *src, size_t src_size,
                              uint8_t **dst, size_t *dst_size);
 };
+#endif // MIPI_DSI_CAM_ENABLE_JPEG
 
 // ========================================
 // H264 Encoder avec esp_video_buffer
 // ========================================
+#ifdef MIPI_DSI_CAM_ENABLE_H264
 class MipiDsiCamH264Encoder {
  public:
   MipiDsiCamH264Encoder(MipiDsiCam *camera);
@@ -109,18 +107,16 @@ class MipiDsiCamH264Encoder {
   struct esp_video_buffer *input_buffer_{nullptr};
   struct esp_video_buffer *output_buffer_{nullptr};
   
-  uint8_t *h264_buffer_{nullptr};
-  size_t h264_buffer_size_{0};
+  bool streaming_started_out_{false};
+  bool streaming_started_cap_{false};
   
-  bool setup_v4l2_buffers_();
   esp_err_t encode_internal_(const uint8_t *src, size_t src_size,
                              uint8_t **dst, size_t *dst_size, 
                              bool *is_keyframe);
 };
+#endif // MIPI_DSI_CAM_ENABLE_H264
 
 } // namespace mipi_dsi_cam
 } // namespace esphome
 
 #endif // USE_ESP32_VARIANT_ESP32P4
-#endif // MIPI_DSI_CAM_ENABLE_H264
-#endif // MIPI_DSI_CAM_ENABLE_JPEG
