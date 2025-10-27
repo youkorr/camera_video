@@ -28,16 +28,14 @@ CONF_JPEG_QUALITY = "jpeg_quality"
 CONF_ENABLE_V4L2 = "enable_v4l2"
 CONF_ENABLE_ISP_PIPELINE = "enable_isp_pipeline"
 
+# ✅ CORRECTION : Déclarer l'enum comme class-based
+PixelFormat = mipi_dsi_cam_ns.enum("PixelFormat", is_class=True)
 
-PixelFormat = mipi_dsi_cam_ns.enum("PixelFormat")
-PIXEL_FORMAT_RGB565 = PixelFormat.PIXEL_FORMAT_RGB565
-PIXEL_FORMAT_YUV422 = PixelFormat.PIXEL_FORMAT_YUV422
-PIXEL_FORMAT_RAW8 = PixelFormat.PIXEL_FORMAT_RAW8
-
-PIXEL_FORMATS = {
-    "RGB565": PIXEL_FORMAT_RGB565,
-    "YUV422": PIXEL_FORMAT_YUV422,
-    "RAW8": PIXEL_FORMAT_RAW8,
+# ✅ CORRECTION : Utiliser des strings pour la validation
+PIXEL_FORMAT_OPTIONS = {
+    "RGB565": "PIXEL_FORMAT_RGB565",
+    "YUV422": "PIXEL_FORMAT_YUV422",
+    "RAW8": "PIXEL_FORMAT_RAW8",
 }
 
 RESOLUTIONS = {
@@ -64,8 +62,6 @@ def load_sensors():
         logger.warning(f"SC202CS sensor not available: {e}")
     except Exception as e:
         logger.error(f"Error loading SC202CS: {e}")
-    
-
     
     if not AVAILABLE_SENSORS:
         raise cv.Invalid(
@@ -128,11 +124,11 @@ CONFIG_SCHEMA = cv.Schema(
         cv.Optional(CONF_LANE): cv.int_range(min=1, max=4),
         cv.Optional(CONF_ADDRESS_SENSOR): cv.i2c_address,
         cv.Optional(CONF_RESOLUTION): validate_resolution,
-        cv.Optional(CONF_PIXEL_FORMAT, default="RGB565"): cv.enum(PIXEL_FORMATS, upper=True),
+        # ✅ CORRECTION : Utiliser PIXEL_FORMAT_OPTIONS au lieu de PIXEL_FORMATS
+        cv.Optional(CONF_PIXEL_FORMAT, default="RGB565"): cv.enum(PIXEL_FORMAT_OPTIONS, upper=True),
         cv.Optional(CONF_FRAMERATE): cv.int_range(min=1, max=60),
         cv.Optional(CONF_JPEG_QUALITY, default=10): cv.int_range(min=1, max=63),
         
-        # Options V4L2 et encoders - V4L2 et ISP activés par défaut
         cv.Optional(CONF_ENABLE_V4L2, default=True): cv.boolean,
         cv.Optional(CONF_ENABLE_ISP_PIPELINE, default=True): cv.boolean,
 
@@ -190,7 +186,11 @@ async def to_code(config):
     cg.add(var.set_bayer_pattern(sensor_info['bayer_pattern']))
     cg.add(var.set_lane_bitrate(sensor_info['lane_bitrate_mbps']))
     
-    cg.add(var.set_pixel_format(config[CONF_PIXEL_FORMAT]))
+    # ✅ CORRECTION : Convertir le string en valeur d'enum
+    pixel_format_str = config[CONF_PIXEL_FORMAT]
+    pixel_format_enum = getattr(PixelFormat, pixel_format_str)
+    cg.add(var.set_pixel_format(pixel_format_enum))
+    
     cg.add(var.set_jpeg_quality(config[CONF_JPEG_QUALITY]))
     cg.add(var.set_framerate(framerate))
     
@@ -198,12 +198,11 @@ async def to_code(config):
         reset_pin = await cg.gpio_pin_expression(config[CONF_RESET_PIN])
         cg.add(var.set_reset_pin(reset_pin))
     
-    # ✅ CORRECTION: Récupérer les valeurs AVANT de les utiliser
+    # Récupérer les valeurs V4L2 et ISP
     enable_v4l2 = config.get(CONF_ENABLE_V4L2, True)
     enable_isp = config.get(CONF_ENABLE_ISP_PIPELINE, True)
-
     
-    # Toujours ajouter ces defines (toujours disponibles)
+    # Toujours ajouter ces defines
     cg.add_define("MIPI_DSI_CAM_ENABLE_V4L2")
     cg.add_define("MIPI_DSI_CAM_ENABLE_ISP_PIPELINE")
     
@@ -213,8 +212,6 @@ async def to_code(config):
     
     if enable_isp:
         cg.add(var.set_enable_isp(True))
-    
-
     
     # Générer le code des drivers
     import os
@@ -271,7 +268,6 @@ inline ISensorDriver* create_sensor_driver(const std::string& sensor_type, i2c::
     
     v4l2_msg = "enabled" if enable_v4l2 else "disabled"
     isp_msg = "enabled" if enable_isp else "disabled"
-
     
     cg.add(cg.RawExpression(f'''
         ESP_LOGI("compile", "Camera configuration:");
@@ -284,5 +280,4 @@ inline ISensorDriver* create_sensor_driver(const std::string& sensor_type, i2c::
         ESP_LOGI("compile", "  External Clock: {ext_clock_msg}");
         ESP_LOGI("compile", "  V4L2 Interface: {v4l2_msg}");
         ESP_LOGI("compile", "  ISP Pipeline: {isp_msg}");
-
     '''))
