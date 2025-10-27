@@ -134,8 +134,14 @@ esp_err_t H264Encoder::init_internal_() {
     return ESP_ERR_NO_MEM;
   }
 
-  // Config formats
+  // ✅ CORRECTION : Déclarer les variables AVANT les goto
   struct v4l2_format in_fmt = {};
+  struct v4l2_format out_fmt = {};
+  struct v4l2_streamparm parm = {};
+  struct v4l2_requestbuffers req = {};
+  struct v4l2_control c = {};
+
+  // Config format input
   in_fmt.type = V4L2_BUF_TYPE_VIDEO_OUTPUT;
   in_fmt.fmt.pix.pixelformat = V4L2_PIX_FMT_RGB565;
   in_fmt.fmt.pix.width = w;
@@ -146,7 +152,7 @@ esp_err_t H264Encoder::init_internal_() {
     goto fail;
   }
 
-  struct v4l2_format out_fmt = {};
+  // Config format output
   out_fmt.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
   out_fmt.fmt.pix.width = w;
   out_fmt.fmt.pix.height = h;
@@ -157,15 +163,13 @@ esp_err_t H264Encoder::init_internal_() {
     goto fail;
   }
 
-  // FPS si supporté
-  struct v4l2_streamparm parm = {};
+  // FPS si supporté (✅ CORRECTION : utiliser .parm)
   parm.type = V4L2_BUF_TYPE_VIDEO_OUTPUT;
   parm.parm.output.timeperframe.numerator = 1;
   parm.parm.output.timeperframe.denominator = std::max<uint32_t>(1, this->camera_->get_fps());
   xioctl(this->h264_fd_, VIDIOC_S_PARM, &parm);
 
   // Demande de buffers USERPTR
-  struct v4l2_requestbuffers req = {};
   req.count = this->input_buffer_->info.count;
   req.type = V4L2_BUF_TYPE_VIDEO_OUTPUT;
   req.memory = V4L2_MEMORY_USERPTR;
@@ -181,16 +185,13 @@ esp_err_t H264Encoder::init_internal_() {
   }
 
   // Bitrate & GOP
-  {
-    struct v4l2_control c = {};
-    c.id = V4L2_CID_MPEG_VIDEO_BITRATE;
-    c.value = (int)this->bitrate_;
-    xioctl(this->h264_fd_, VIDIOC_S_CTRL, &c);
-    
-    c.id = V4L2_CID_MPEG_VIDEO_GOP_SIZE;
-    c.value = (int)this->gop_size_;
-    xioctl(this->h264_fd_, VIDIOC_S_CTRL, &c);
-  }
+  c.id = V4L2_CID_MPEG_VIDEO_BITRATE;
+  c.value = (int)this->bitrate_;
+  xioctl(this->h264_fd_, VIDIOC_S_CTRL, &c);
+  
+  c.id = V4L2_CID_MPEG_VIDEO_GOP_SIZE;
+  c.value = (int)this->gop_size_;
+  xioctl(this->h264_fd_, VIDIOC_S_CTRL, &c);
 
   this->streaming_started_out_ = false;
   this->streaming_started_cap_ = false;
