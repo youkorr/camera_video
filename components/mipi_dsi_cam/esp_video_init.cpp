@@ -21,7 +21,8 @@ typedef struct {
 
 // Structure pour mapper fd VFS → device_num
 typedef struct {
-    int vfs_fd;
+    int vfs_fd;          // Le fd système complet
+    int local_fd;        // L'index dans notre table
     int device_num;
     bool in_use;
 } fd_mapping_t;
@@ -30,19 +31,36 @@ static esp_video_vfs_t s_video_devices[MAX_VIDEO_DEVICES] = {0};
 static fd_mapping_t s_fd_mappings[MAX_OPEN_FDS] = {0};
 static bool s_vfs_registered = false;
 static void *s_vfs_ctx = nullptr;
+static int s_vfs_base_fd = -1;  // ✅ NOUVEAU : Stocker le base fd du VFS
 
 // Fonctions de gestion du mapping
-static int allocate_fd_mapping(int device_num) {
+static int allocate_fd_mapping(int device_num, int vfs_fd) {
     for (int i = 0; i < MAX_OPEN_FDS; i++) {
         if (!s_fd_mappings[i].in_use) {
-            s_fd_mappings[i].vfs_fd = i;
+            s_fd_mappings[i].vfs_fd = vfs_fd;
+            s_fd_mappings[i].local_fd = i;
             s_fd_mappings[i].device_num = device_num;
             s_fd_mappings[i].in_use = true;
-            ESP_LOGD(TAG, "Allocated mapping: local_fd=%d → device_num=%d", i, device_num);
+            ESP_LOGI(TAG, "✅ Mapping: vfs_fd=%d → local_fd=%d → device_num=%d", 
+                     vfs_fd, i, device_num);
             return i;
         }
     }
-    ESP_LOGE(TAG, "No free fd mapping slots");
+    ESP_LOGE(TAG, "❌ No free fd mapping slots");
+    return -1;
+}
+
+static int get_device_num_from_vfs_fd(int vfs_fd) {
+    // Recherche directe par vfs_fd
+    for (int i = 0; i < MAX_OPEN_FDS; i++) {
+        if (s_fd_mappings[i].in_use && s_fd_mappings[i].vfs_fd == vfs_fd) {
+            ESP_LOGD(TAG, "Found mapping: vfs_fd=%d → device_num=%d", 
+                     vfs_fd, s_fd_mappings[i].device_num);
+            return s_fd_mappings[i].device_num;
+        }
+    }
+    
+    ESP_LOGE(TAG, "❌ No mapping found for vfs_fd=%d", vfs_fd);
     return -1;
 }
 
@@ -60,64 +78,43 @@ static int get_device_num_from_local_fd(int local_fd) {
 
 static void free_fd_mapping(int local_fd) {
     if (local_fd >= 0 && local_fd < MAX_OPEN_FDS) {
-        ESP_LOGD(TAG, "Freed mapping: local_fd=%d (was device_num=%d)", 
-                 local_fd, s_fd_mappings[local_fd].device_num);
+        ESP_LOGI(TAG, "Freed mapping: local_fd=%d (vfs_fd=%d, device_num=%d)", 
+                 local_fd, s_fd_mappings[local_fd].vfs_fd, 
+                 s_fd_mappings[local_fd].device_num);
         s_fd_mappings[local_fd].in_use = false;
         s_fd_mappings[local_fd].device_num = -1;
+        s_fd_mappings[local_fd].vfs_fd = -1;
     }
 }
 
 // ✅ FONCTION PUBLIQUE CORRIGÉE : Récupérer le contexte V4L2 depuis un fd VFS
 extern "C" void* get_v4l2_context_from_fd(int vfs_fd) {
-    // vfs_fd est le fd système complet
-    // ESP-IDF VFS ajoute typiquement un offset de 3 (pour stdin/stdout/stderr)
-    // On doit essayer différents décodages pour trouver le bon local_fd
+    ESP_LOGD(TAG, "🔍 Looking up V4L2 context for vfs_fd=%d", vfs_fd);
     
-    int local_fd = -1;
-    int device_num = -1;
-    
-    // Tentative 1 : Direct (pour les implémentations simples)
-    local_fd = vfs_fd;
-    device_num = get_device_num_from_local_fd(local_fd);
-    
-    // Tentative 2 : Avec offset standard ESP-IDF (-3)
-    if (device_num < 0 && vfs_fd >= 3) {
-        local_fd = vfs_fd - 3;
-        device_num = get_device_num_from_local_fd(local_fd);
-    }
-    
-    // Tentative 3 : Masque VFS (10 bits bas)
-    if (device_num < 0) {
-        local_fd = vfs_fd & 0x3FF;
-        device_num = get_device_num_from_local_fd(local_fd);
-    }
-    
-    // Tentative 4 : Parcourir tous les mappings actifs (fallback)
-    if (device_num < 0) {
-        for (int i = 0; i < MAX_OPEN_FDS; i++) {
-            if (s_fd_mappings[i].in_use) {
-                device_num = s_fd_mappings[i].device_num;
-                local_fd = i;
-                ESP_LOGD(TAG, "Found mapping by scan: vfs_fd=%d → local_fd=%d → device_num=%d", 
-                         vfs_fd, local_fd, device_num);
-                break;
-            }
-        }
-    }
+    // Recherche directe par vfs_fd dans la table
+    int device_num = get_device_num_from_vfs_fd(vfs_fd);
     
     if (device_num < 0 || device_num >= MAX_VIDEO_DEVICES) {
-        ESP_LOGE(TAG, "❌ No device mapping for vfs_fd=%d (tried offsets 0, -3, &0x3FF, scan)", vfs_fd);
+        ESP_LOGE(TAG, "❌ No device mapping for vfs_fd=%d", vfs_fd);
+        
+        // Debug : afficher tous les mappings actifs
+        ESP_LOGI(TAG, "Active mappings:");
+        for (int i = 0; i < MAX_OPEN_FDS; i++) {
+            if (s_fd_mappings[i].in_use) {
+                ESP_LOGI(TAG, "  [%d] vfs_fd=%d → device_num=%d", 
+                         i, s_fd_mappings[i].vfs_fd, s_fd_mappings[i].device_num);
+            }
+        }
         return nullptr;
     }
     
     if (!s_video_devices[device_num].video_device) {
-        ESP_LOGE(TAG, "❌ Device %d not registered (vfs_fd=%d, local_fd=%d)", 
-                 device_num, vfs_fd, local_fd);
+        ESP_LOGE(TAG, "❌ Device %d not registered (vfs_fd=%d)", device_num, vfs_fd);
         return nullptr;
     }
     
-    ESP_LOGD(TAG, "✅ Resolved vfs_fd=%d → local_fd=%d → device_num=%d → context=%p", 
-             vfs_fd, local_fd, device_num, s_video_devices[device_num].video_device);
+    ESP_LOGD(TAG, "✅ Resolved vfs_fd=%d → device_num=%d → context=%p", 
+             vfs_fd, device_num, s_video_devices[device_num].video_device);
     
     return s_video_devices[device_num].video_device;
 }
@@ -143,7 +140,7 @@ static void init_video_vfs() {
 }
 
 static int video_open(const char *path, int flags, int mode) {
-    ESP_LOGI(TAG, "VFS open: %s (flags=0x%x)", path, flags);
+    ESP_LOGI(TAG, "📂 VFS open: %s (flags=0x%x)", path, flags);
     
     int device_num = -1;
     
@@ -152,18 +149,33 @@ static int video_open(const char *path, int flags, int mode) {
     if (video_part && sscanf(video_part, "video%d", &device_num) == 1) {
         if (device_num >= 0 && device_num < MAX_VIDEO_DEVICES) {
             if (s_video_devices[device_num].video_device) {
-                int local_fd = allocate_fd_mapping(device_num);
+                // ✅ IMPORTANT : Retourner le local_fd, pas le device_num
+                // Le VFS va ajouter son propre offset pour créer le vfs_fd
+                int local_fd = -1;
+                for (int i = 0; i < MAX_OPEN_FDS; i++) {
+                    if (!s_fd_mappings[i].in_use) {
+                        local_fd = i;
+                        break;
+                    }
+                }
+                
                 if (local_fd < 0) {
                     errno = ENFILE;
                     return -1;
                 }
+                
+                // On ne connaît pas encore le vfs_fd, on le stockera plus tard
+                s_fd_mappings[local_fd].local_fd = local_fd;
+                s_fd_mappings[local_fd].device_num = device_num;
+                s_fd_mappings[local_fd].in_use = true;
+                s_fd_mappings[local_fd].vfs_fd = -1;  // Sera mis à jour au premier ioctl/mmap
                 
                 s_video_devices[device_num].ref_count++;
                 
                 ESP_LOGI(TAG, "✅ Opened %s → local_fd=%d, device_num=%d (refs=%d)", 
                          path, local_fd, device_num, s_video_devices[device_num].ref_count);
                 
-                return local_fd;
+                return local_fd;  // Le VFS ajoutera son offset pour créer le vfs_fd
             } else {
                 ESP_LOGE(TAG, "❌ Device video%d not registered", device_num);
             }
@@ -180,6 +192,8 @@ static int video_open(const char *path, int flags, int mode) {
 
 static int video_close(int local_fd) {
     int device_num = get_device_num_from_local_fd(local_fd);
+    
+    ESP_LOGI(TAG, "🔒 VFS close: local_fd=%d → device_num=%d", local_fd, device_num);
     
     if (device_num >= 0 && device_num < MAX_VIDEO_DEVICES) {
         if (s_video_devices[device_num].ref_count > 0) {
@@ -327,6 +341,15 @@ extern "C" esp_err_t esp_video_register_device(int device_id, void *video_device
     return ESP_OK;
 }
 
+// ✅ NOUVELLE FONCTION : Enregistrer le vfs_fd après que le VFS l'ait créé
+extern "C" void esp_video_update_vfs_fd(int local_fd, int vfs_fd) {
+    if (local_fd >= 0 && local_fd < MAX_OPEN_FDS && s_fd_mappings[local_fd].in_use) {
+        s_fd_mappings[local_fd].vfs_fd = vfs_fd;
+        ESP_LOGI(TAG, "✅ Updated mapping: local_fd=%d → vfs_fd=%d → device_num=%d", 
+                 local_fd, vfs_fd, s_fd_mappings[local_fd].device_num);
+    }
+}
+
 extern "C" esp_err_t esp_video_init(const esp_video_init_config_t *config)
 {
     if (!config) {
@@ -375,6 +398,7 @@ extern "C" esp_err_t esp_video_deinit(void)
     for (int i = 0; i < MAX_OPEN_FDS; i++) {
         s_fd_mappings[i].in_use = false;
         s_fd_mappings[i].device_num = -1;
+        s_fd_mappings[i].vfs_fd = -1;
     }
     
     if (s_vfs_registered) {
