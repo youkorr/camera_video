@@ -19,9 +19,9 @@
 #include "freertos/queue.h"
 
 #include "esp_video.h"
-#include "esp_video_device.h"
-#include "esp_video_isp_ioctl.h"
-#include "esp_video_device_internal.h"
+//#include "esp_video_device.h"
+//#include "esp_video_isp_ioctl.h"
+//#include "esp_video_device_internal.h"
 
 /**
  * IDF-9706
