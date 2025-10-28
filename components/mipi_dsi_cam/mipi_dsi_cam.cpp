@@ -712,7 +712,7 @@ void MipiDsiCam::loop() {
     }
     
     uint32_t now = millis();
-    if (now - this->last_frame_log_time_ >= 30000) {
+    if (now - this->last_frame_log_time_ >= 3000) {
       float sensor_fps = this->total_frames_received_ / 3.0f;
       float ready_rate = (float)ready_count / (float)(ready_count + not_ready_count) * 100.0f;
       
