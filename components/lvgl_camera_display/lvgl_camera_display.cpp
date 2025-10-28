@@ -657,7 +657,7 @@ void LVGLCameraDisplay::loop() {
   if (this->first_update_) {
     this->first_update_ = false;
     this->last_fps_time_ = now;
-  } else if (now - this->last_fps_time_ >= 50000) {
+  } else if (now - this->last_fps_time_ >= 5000) {
     float fps = this->frame_count_ * 1000.0f / (now - this->last_fps_time_);
     float drop_rate = (this->drop_count_ * 100.0f) / (this->frame_count_ + this->drop_count_);
     ESP_LOGI(TAG, "📊 Display (%s): %.1f FPS | Drops: %u (%.1f%%)", 
