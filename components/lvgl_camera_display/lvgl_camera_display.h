@@ -4,6 +4,9 @@
 #include "esphome/core/hal.h"
 #include "esphome/components/lvgl/lvgl_esphome.h"
 
+// ✅ AJOUT : Include explicite pour lv_canvas
+#include "lvgl.h"
+
 #ifdef USE_ESP32_VARIANT_ESP32P4
 #include <fcntl.h>
 #include "ioctl.h"
@@ -71,7 +74,7 @@ class LVGLCameraDisplay : public Component {
   uint8_t *lvgl_framebuffer_{nullptr};
   size_t lvgl_framebuffer_size_{0};
   
-  // ✅ NOUVEAU : Buffer intermédiaire aligné pour PPA
+  // Buffer intermédiaire aligné pour PPA
   uint8_t *aligned_buffer_{nullptr};
   size_t aligned_buffer_size_{0};
   
