@@ -42,7 +42,6 @@ class LVGLCameraDisplay : public Component {
   void set_mirror_x(bool enable) { this->mirror_x_ = enable; }
   void set_mirror_y(bool enable) { this->mirror_y_ = enable; }
   
-  // ✅ Nouvelles méthodes pour activer le mode direct et PPA
   void set_direct_mode(bool enable) { this->direct_mode_ = enable; }
   void set_use_ppa(bool enable) { this->use_ppa_ = enable; }
 
@@ -66,11 +65,15 @@ class LVGLCameraDisplay : public Component {
   uint8_t *transform_buffer_{nullptr};
   size_t transform_buffer_size_{0};
   
-  // ✅ Direct mode: framebuffer LVGL
+  // Direct mode: framebuffer LVGL
   lv_disp_t *lvgl_display_{nullptr};
   lv_disp_draw_buf_t *lvgl_draw_buf_{nullptr};
   uint8_t *lvgl_framebuffer_{nullptr};
   size_t lvgl_framebuffer_size_{0};
+  
+  // ✅ NOUVEAU : Buffer intermédiaire aligné pour PPA
+  uint8_t *aligned_buffer_{nullptr};
+  size_t aligned_buffer_size_{0};
   
   // Méthodes V4L2
   bool open_v4l2_device_();
@@ -86,7 +89,7 @@ class LVGLCameraDisplay : public Component {
   void deinit_ppa_();
   bool transform_frame_(const uint8_t *src, uint8_t *dst);
   
-  // ✅ Modes d'affichage
+  // Modes d'affichage
   bool init_direct_mode_();
   void update_direct_mode_();
   void update_canvas_mode_();
@@ -99,8 +102,8 @@ class LVGLCameraDisplay : public Component {
   RotationAngle rotation_{ROTATION_0};
   bool mirror_x_{false};
   bool mirror_y_{false};
-  bool direct_mode_{true};   // ✅ Mode direct par défaut
-  bool use_ppa_{true};       // ✅ PPA activé par défaut
+  bool direct_mode_{true};
+  bool use_ppa_{true};
   uint32_t update_interval_{33};
   
   uint32_t frame_count_{0};
