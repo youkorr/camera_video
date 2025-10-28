@@ -28,6 +28,10 @@ CONF_JPEG_QUALITY = "jpeg_quality"
 CONF_ENABLE_V4L2 = "enable_v4l2"
 CONF_ENABLE_ISP_PIPELINE = "enable_isp_pipeline"
 
+# ✅ Nouveaux paramètres pour les encodeurs
+CONF_ENABLE_JPEG_ENCODER = "enable_jpeg_encoder"
+CONF_ENABLE_H264_ENCODER = "enable_h264_encoder"
+
 # ✅ Déclarer l'enum comme class-based
 PixelFormat = mipi_dsi_cam_ns.enum("PixelFormat", is_class=True)
 
@@ -134,9 +138,11 @@ CONFIG_SCHEMA = cv.Schema(
         cv.Optional(CONF_PIXEL_FORMAT, default="RGB565"): cv.enum(PIXEL_FORMAT_OPTIONS, upper=True),
         cv.Optional(CONF_FRAMERATE): cv.int_range(min=1, max=60),
         cv.Optional(CONF_JPEG_QUALITY, default=10): cv.int_range(min=1, max=63),
-        
         cv.Optional(CONF_ENABLE_V4L2, default=True): cv.boolean,
         cv.Optional(CONF_ENABLE_ISP_PIPELINE, default=True): cv.boolean,
+        # ✅ Nouveaux paramètres
+        cv.Optional(CONF_ENABLE_JPEG_ENCODER, default=False): cv.boolean,
+        cv.Optional(CONF_ENABLE_H264_ENCODER, default=False): cv.boolean,
     }
 ).extend(cv.COMPONENT_SCHEMA).extend(i2c.i2c_device_schema(0x36))
 
@@ -191,10 +197,10 @@ async def to_code(config):
     cg.add(var.set_bayer_pattern(sensor_info['bayer_pattern']))
     cg.add(var.set_lane_bitrate(sensor_info['lane_bitrate_mbps']))
     
-    # ✅ CORRECTION FINALE : Mapping correct YAML -> enum C++
-    pixel_format_key = config[CONF_PIXEL_FORMAT]  # "RGB565" depuis YAML
-    pixel_format_enum_name = PIXEL_FORMAT_MAPPING[pixel_format_key]  # "PIXEL_FORMAT_RGB565"
-    pixel_format_enum = getattr(PixelFormat, pixel_format_enum_name)  # PixelFormat::PIXEL_FORMAT_RGB565
+    # ✅ Mapping correct YAML -> enum C++
+    pixel_format_key = config[CONF_PIXEL_FORMAT]
+    pixel_format_enum_name = PIXEL_FORMAT_MAPPING[pixel_format_key]
+    pixel_format_enum = getattr(PixelFormat, pixel_format_enum_name)
     cg.add(var.set_pixel_format(pixel_format_enum))
     
     cg.add(var.set_jpeg_quality(config[CONF_JPEG_QUALITY]))
@@ -204,24 +210,31 @@ async def to_code(config):
         reset_pin = await cg.gpio_pin_expression(config[CONF_RESET_PIN])
         cg.add(var.set_reset_pin(reset_pin))
     
-    # Récupérer les valeurs V4L2 et ISP
+    # Récupérer les valeurs V4L2, ISP et encodeurs
     enable_v4l2 = config.get(CONF_ENABLE_V4L2, True)
     enable_isp = config.get(CONF_ENABLE_ISP_PIPELINE, True)
+    enable_jpeg = config.get(CONF_ENABLE_JPEG_ENCODER, False)
+    enable_h264 = config.get(CONF_ENABLE_H264_ENCODER, False)
     
     # Toujours ajouter ces defines
     cg.add_define("MIPI_DSI_CAM_ENABLE_V4L2")
     cg.add_define("MIPI_DSI_CAM_ENABLE_ISP_PIPELINE")
     
-    # Les initialiser automatiquement si demandé
     if enable_v4l2:
         cg.add(var.set_enable_v4l2(True))
-    
     if enable_isp:
         cg.add(var.set_enable_isp(True))
     
+    # ✅ Ajout des encodeurs
+    if enable_jpeg:
+        cg.add(var.set_enable_jpeg(True))
+        cg.add_define("USE_JPEG_ENCODER")
+    if enable_h264:
+        cg.add(var.set_enable_h264(True))
+        cg.add_define("USE_H264_ENCODER")
+    
     # Générer le code des drivers
     import os
-    
     all_drivers_code = ""
     
     for sensor_id, sensor_data in AVAILABLE_SENSORS.items():
@@ -244,7 +257,6 @@ inline ISensorDriver* create_sensor_driver(const std::string& sensor_type, i2c::
 '''
     
     factory_code += f'''
-    
     ESP_LOGE("mipi_dsi_cam", "Unknown sensor type: %s", sensor_type.c_str());
     return nullptr;
 }}
@@ -271,9 +283,10 @@ inline ISensorDriver* create_sensor_driver(const std::string& sensor_type, i2c::
     # Message de log pour la configuration
     has_ext_clock = CONF_EXTERNAL_CLOCK_PIN in config and config[CONF_EXTERNAL_CLOCK_PIN] != NO_CLOCK
     ext_clock_msg = "enabled" if has_ext_clock else "disabled"
-    
     v4l2_msg = "enabled" if enable_v4l2 else "disabled"
     isp_msg = "enabled" if enable_isp else "disabled"
+    jpeg_msg = "enabled" if enable_jpeg else "disabled"
+    h264_msg = "enabled" if enable_h264 else "disabled"
     
     cg.add(cg.RawExpression(f'''
         ESP_LOGI("compile", "Camera configuration:");
@@ -286,4 +299,7 @@ inline ISensorDriver* create_sensor_driver(const std::string& sensor_type, i2c::
         ESP_LOGI("compile", "  External Clock: {ext_clock_msg}");
         ESP_LOGI("compile", "  V4L2 Interface: {v4l2_msg}");
         ESP_LOGI("compile", "  ISP Pipeline: {isp_msg}");
+        ESP_LOGI("compile", "  JPEG Encoder: {jpeg_msg}");
+        ESP_LOGI("compile", "  H264 Encoder: {h264_msg}");
     '''))
+
