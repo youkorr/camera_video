@@ -100,13 +100,7 @@ void LVGLCameraDisplay::setup() {
     }
   }
 
-  // ✅ CRITIQUE : Créer le mutex pour protéger l'accès au display
-  this->display_mutex_ = xSemaphoreCreateMutex();
-  if (!this->display_mutex_) {
-    ESP_LOGE(TAG, "❌ Failed to create display mutex");
-    this->mark_failed();
-    return;
-  }
+  // ✅ PAS DE MUTEX CUSTOM - ESPHome gère ça avec App.schedule()
 
   // ✅ CRITIQUE : Créer la tâche de capture dédiée (comme M5Stack)
   this->task_running_ = true;
@@ -143,7 +137,7 @@ void LVGLCameraDisplay::setup() {
 
 #ifdef USE_ESP32_VARIANT_ESP32P4
 
-// ✅ NOUVEAU : Tâche de capture (comme M5Stack)
+// ✅ Tâche de capture (comme M5Stack)
 void LVGLCameraDisplay::capture_task_(void *param) {
   LVGLCameraDisplay *self = (LVGLCameraDisplay *)param;
   ESP_LOGI(TAG, "📹 Capture task started on core %d", xPortGetCoreID());
@@ -152,7 +146,7 @@ void LVGLCameraDisplay::capture_task_(void *param) {
   vTaskDelete(NULL);
 }
 
-// ✅ NOUVEAU : Boucle de capture (VRAIE solution 30 FPS)
+// ✅ Boucle de capture (VRAIE solution 30 FPS)
 void LVGLCameraDisplay::capture_loop_() {
   uint32_t frame_count = 0;
   uint32_t drop_count = 0;
@@ -193,21 +187,23 @@ void LVGLCameraDisplay::capture_loop_() {
         }
       }
 
-      // ✅ CRITIQUE : Lock display (comme M5Stack avec bsp_display_lock)
-      if (xSemaphoreTake(this->display_mutex_, pdMS_TO_TICKS(10)) == pdTRUE) {
-        // Mettre à jour le canvas avec l'API image
-        camera_img_dsc.header.always_zero = 0;
-        camera_img_dsc.header.w = canvas_width;
-        camera_img_dsc.header.h = canvas_height;
-        camera_img_dsc.data_size = canvas_width * canvas_height * 2;
-        camera_img_dsc.header.cf = LV_IMG_CF_TRUE_COLOR;  // LVGL 8
-        camera_img_dsc.data = display_buffer;
-        
-        lv_img_set_src(this->canvas_obj_, &camera_img_dsc);
-        lv_obj_invalidate(this->canvas_obj_);
-        
-        xSemaphoreGive(this->display_mutex_);
-      }
+      // ✅ CORRECTION CRITIQUE : Préparer les données AVANT App.schedule
+      camera_img_dsc.header.always_zero = 0;
+      camera_img_dsc.header.w = canvas_width;
+      camera_img_dsc.header.h = canvas_height;
+      camera_img_dsc.data_size = canvas_width * canvas_height * 2;
+      camera_img_dsc.header.cf = LV_IMG_CF_TRUE_COLOR;
+      camera_img_dsc.data = display_buffer;
+      
+      // ✅ Utiliser App.schedule pour exécuter dans le thread LVGL
+      // Ceci garantit que lv_img_set_src est appelé au bon moment
+      lv_obj_t *canvas = this->canvas_obj_;
+      App.schedule([canvas]() {
+        if (canvas) {
+          lv_img_set_src(canvas, &camera_img_dsc);
+          lv_obj_invalidate(canvas);
+        }
+      });
     }
     // Mode direct
     else if (this->direct_mode_ && this->lvgl_framebuffer_) {
@@ -241,11 +237,10 @@ void LVGLCameraDisplay::capture_loop_() {
         memcpy(this->lvgl_framebuffer_, frame_data, copy_size);
       }
 
-      // ✅ Lock pour invalider l'écran
-      if (xSemaphoreTake(this->display_mutex_, pdMS_TO_TICKS(10)) == pdTRUE) {
+      // ✅ Invalider dans le thread LVGL
+      App.schedule([]() {
         lv_obj_invalidate(lv_scr_act());
-        xSemaphoreGive(this->display_mutex_);
-      }
+      });
     }
 
     this->release_v4l2_frame_();
@@ -268,8 +263,6 @@ void LVGLCameraDisplay::capture_loop_() {
     vTaskDelay(pdMS_TO_TICKS(10));
   }
 }
-
-// ... (fonctions V4L2 inchangées - je les mets pour avoir le fichier complet) ...
 
 bool LVGLCameraDisplay::open_v4l2_device_() {
   ESP_LOGI(TAG, "Opening V4L2 device: %s", this->video_device_);
@@ -700,10 +693,7 @@ void LVGLCameraDisplay::stop_capture() {
   
   this->cleanup_v4l2_();
   
-  if (this->display_mutex_) {
-    vSemaphoreDelete(this->display_mutex_);
-    this->display_mutex_ = nullptr;
-  }
+  // ✅ PAS DE MUTEX À SUPPRIMER - on utilise App.schedule()
   
   ESP_LOGI(TAG, "✅ Capture stopped");
 }
