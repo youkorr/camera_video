@@ -836,7 +836,7 @@ void MipiDsiCam::set_brightness_level(uint8_t level) {
   if (level > 10) level = 10;
   
   uint16_t exposure = 0x400 + (level * 0x0B0);
-  uint8_t gain = level * 6;
+  uint8_t gain = level * 7;
   
   ESP_LOGI(TAG, "🔆 Setting brightness level %u: exposure=0x%04X, gain=%u", 
            level, exposure, gain);
