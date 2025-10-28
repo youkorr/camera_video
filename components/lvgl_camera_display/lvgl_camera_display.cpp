@@ -13,7 +13,7 @@ namespace lvgl_camera_display {
 
 static const char *const TAG = "lvgl_camera_display";
 
-// ✅ Descripteur d'image global pour le canvas (LVGL 8)
+// Descripteur d'image global pour le canvas (LVGL 8)
 static lv_img_dsc_t camera_img_dsc;
 
 void LVGLCameraDisplay::setup() {
@@ -100,9 +100,17 @@ void LVGLCameraDisplay::setup() {
     }
   }
 
-  // ✅ PAS DE MUTEX CUSTOM - ESPHome gère ça avec App.schedule()
+  // ✅ Créer le mutex pour protéger l'accès LVGL
+  this->lvgl_mutex_ = xSemaphoreCreateBinary();
+  if (!this->lvgl_mutex_) {
+    ESP_LOGE(TAG, "❌ Failed to create LVGL mutex");
+    this->mark_failed();
+    return;
+  }
+  xSemaphoreGive(this->lvgl_mutex_);  // Initialiser comme disponible
+  ESP_LOGI(TAG, "✅ LVGL mutex created");
 
-  // ✅ CRITIQUE : Créer la tâche de capture dédiée (comme M5Stack)
+  // ✅ Créer la tâche de capture dédiée (comme M5Stack)
   this->task_running_ = true;
   BaseType_t ret = xTaskCreatePinnedToCore(
     capture_task_,              // Fonction de la tâche
@@ -137,7 +145,7 @@ void LVGLCameraDisplay::setup() {
 
 #ifdef USE_ESP32_VARIANT_ESP32P4
 
-// ✅ Tâche de capture (comme M5Stack)
+// Tâche de capture (comme M5Stack)
 void LVGLCameraDisplay::capture_task_(void *param) {
   LVGLCameraDisplay *self = (LVGLCameraDisplay *)param;
   ESP_LOGI(TAG, "📹 Capture task started on core %d", xPortGetCoreID());
@@ -146,7 +154,7 @@ void LVGLCameraDisplay::capture_task_(void *param) {
   vTaskDelete(NULL);
 }
 
-// ✅ Boucle de capture (VRAIE solution 30 FPS)
+// Boucle de capture (VRAIE solution 30 FPS)
 void LVGLCameraDisplay::capture_loop_() {
   uint32_t frame_count = 0;
   uint32_t drop_count = 0;
@@ -187,23 +195,20 @@ void LVGLCameraDisplay::capture_loop_() {
         }
       }
 
-      // ✅ CORRECTION CRITIQUE : Préparer les données AVANT App.schedule
+      // ✅ Préparer le descripteur d'image
       camera_img_dsc.header.always_zero = 0;
       camera_img_dsc.header.w = canvas_width;
       camera_img_dsc.header.h = canvas_height;
       camera_img_dsc.data_size = canvas_width * canvas_height * 2;
-      camera_img_dsc.header.cf = LV_IMG_CF_TRUE_COLOR;
+      camera_img_dsc.header.cf = LV_IMG_CF_TRUE_COLOR;  // LVGL 8
       camera_img_dsc.data = display_buffer;
       
-      // ✅ Utiliser App.schedule pour exécuter dans le thread LVGL
-      // Ceci garantit que lv_img_set_src est appelé au bon moment
-      lv_obj_t *canvas = this->canvas_obj_;
-      App.schedule([canvas]() {
-        if (canvas) {
-          lv_img_set_src(canvas, &camera_img_dsc);
-          lv_obj_invalidate(canvas);
-        }
-      });
+      // ✅ CRITIQUE : Protéger l'accès LVGL avec mutex
+      if (xSemaphoreTake(this->lvgl_mutex_, pdMS_TO_TICKS(5)) == pdTRUE) {
+        lv_img_set_src(this->canvas_obj_, &camera_img_dsc);
+        lv_obj_invalidate(this->canvas_obj_);
+        xSemaphoreGive(this->lvgl_mutex_);
+      }
     }
     // Mode direct
     else if (this->direct_mode_ && this->lvgl_framebuffer_) {
@@ -237,10 +242,11 @@ void LVGLCameraDisplay::capture_loop_() {
         memcpy(this->lvgl_framebuffer_, frame_data, copy_size);
       }
 
-      // ✅ Invalider dans le thread LVGL
-      App.schedule([]() {
+      // ✅ CRITIQUE : Protéger l'invalidation avec mutex
+      if (xSemaphoreTake(this->lvgl_mutex_, pdMS_TO_TICKS(5)) == pdTRUE) {
         lv_obj_invalidate(lv_scr_act());
-      });
+        xSemaphoreGive(this->lvgl_mutex_);
+      }
     }
 
     this->release_v4l2_frame_();
@@ -259,7 +265,7 @@ void LVGLCameraDisplay::capture_loop_() {
       last_fps_time = now;
     }
 
-    // ✅ Délai comme M5Stack (10ms = 100 FPS max)
+    // Délai comme M5Stack (10ms = 100 FPS max)
     vTaskDelay(pdMS_TO_TICKS(10));
   }
 }
@@ -666,16 +672,6 @@ bool LVGLCameraDisplay::init_direct_mode_() {
   return true;
 }
 
-void LVGLCameraDisplay::update_direct_mode_() {
-  // ⚠️ Cette fonction n'est plus utilisée avec la tâche dédiée
-  ESP_LOGW(TAG, "update_direct_mode_() should not be called with task-based capture");
-}
-
-void LVGLCameraDisplay::update_canvas_mode_() {
-  // ⚠️ Cette fonction n'est plus utilisée avec la tâche dédiée
-  ESP_LOGW(TAG, "update_canvas_mode_() should not be called with task-based capture");
-}
-
 void LVGLCameraDisplay::stop_capture() {
   ESP_LOGI(TAG, "Stopping capture task...");
   this->task_running_ = false;
@@ -693,28 +689,30 @@ void LVGLCameraDisplay::stop_capture() {
   
   this->cleanup_v4l2_();
   
-  // ✅ PAS DE MUTEX À SUPPRIMER - on utilise App.schedule()
+  // ✅ Supprimer le mutex
+  if (this->lvgl_mutex_) {
+    vSemaphoreDelete(this->lvgl_mutex_);
+    this->lvgl_mutex_ = nullptr;
+  }
   
   ESP_LOGI(TAG, "✅ Capture stopped");
 }
 
 #endif
 
-// ✅ loop() ne fait plus rien - tout est dans la tâche
+// loop() ne fait plus rien - tout est dans la tâche
 void LVGLCameraDisplay::loop() {
   // La capture se fait dans la tâche dédiée
-  // Cette fonction est vide maintenant
 }
 
 void LVGLCameraDisplay::dump_config() {
   ESP_LOGCONFIG(TAG, "LVGL Camera Display (Task-based):");
   ESP_LOGCONFIG(TAG, "  Camera: %s", this->camera_ ? "Connected" : "Not connected");
   ESP_LOGCONFIG(TAG, "  Resolution: %ux%u", this->width_, this->height_);
-  ESP_LOGCONFIG(TAG, "  Update interval: %u ms", this->update_interval_);
   ESP_LOGCONFIG(TAG, "  Rotation: %d°", this->rotation_);
   ESP_LOGCONFIG(TAG, "  Mirror X: %s", this->mirror_x_ ? "ON" : "OFF");
   ESP_LOGCONFIG(TAG, "  Mirror Y: %s", this->mirror_y_ ? "ON" : "OFF");
-  ESP_LOGCONFIG(TAG, "  Display mode: %s", this->direct_mode_ ? "DIRECT (hardware)" : "CANVAS (software)");
+  ESP_LOGCONFIG(TAG, "  Display mode: %s", this->direct_mode_ ? "DIRECT" : "CANVAS");
   ESP_LOGCONFIG(TAG, "  PPA: %s", this->use_ppa_ ? "ENABLED" : "DISABLED");
   ESP_LOGCONFIG(TAG, "  Capture task: %s", this->task_running_ ? "RUNNING" : "STOPPED");
 #ifdef USE_ESP32_VARIANT_ESP32P4
