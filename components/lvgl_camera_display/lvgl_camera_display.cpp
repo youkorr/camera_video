@@ -2,10 +2,6 @@
 #include "esphome/core/log.h"
 #include "esphome/core/application.h"
 
-#ifdef USE_ESP32_VARIANT_ESP32P4
-#include "esp_cache.h"
-#endif
-
 // ✅ Déclaration de la fonction externe (AVANT la classe)
 extern "C" void register_fd_to_device(int real_fd, int temp_fd);
 
@@ -15,9 +11,7 @@ namespace lvgl_camera_display {
 static const char *const TAG = "lvgl_camera_display";
 
 void LVGLCameraDisplay::setup() {
-  ESP_LOGCONFIG(TAG, "🎥 LVGL Camera Display");
-  ESP_LOGCONFIG(TAG, "  Mode: %s", this->direct_mode_ ? "DIRECT (DMA/PPA)" : "CANVAS (software)");
-  ESP_LOGCONFIG(TAG, "  PPA: %s", this->use_ppa_ ? "ENABLED" : "DISABLED");
+  ESP_LOGCONFIG(TAG, "🎥 LVGL Camera Display (V4L2 Mode)");
 
 #ifdef USE_ESP32_VARIANT_ESP32P4
   // Récupérer la résolution depuis la caméra
@@ -51,7 +45,7 @@ void LVGLCameraDisplay::setup() {
   // Attendre stabilisation
   delay(200);
 
-  // Ouvrir le device V4L2
+  // Ouvrir le device V4L2 (comme M5Stack)
   if (!this->open_v4l2_device_()) {
     ESP_LOGE(TAG, "❌ Failed to open V4L2 device");
     this->mark_failed();
@@ -79,34 +73,16 @@ void LVGLCameraDisplay::setup() {
     return;
   }
 
-  // ✅ Initialiser PPA si transformations nécessaires ou si use_ppa activé
-  if (this->use_ppa_ && (this->rotation_ != ROTATION_0 || this->mirror_x_ || this->mirror_y_ || this->direct_mode_)) {
+  // Initialiser PPA si transformations nécessaires
+  if (this->rotation_ != ROTATION_0 || this->mirror_x_ || this->mirror_y_) {
     if (!this->init_ppa_()) {
       ESP_LOGE(TAG, "❌ Failed to initialize PPA");
-      // Ne pas fail complètement, on peut continuer sans PPA
-      this->use_ppa_ = false;
-      ESP_LOGW(TAG, "⚠️  Continuing without PPA");
-    } else {
-      ESP_LOGI(TAG, "✅ PPA initialized (rotation=%d°, mirror_x=%s, mirror_y=%s)",
-               this->rotation_, this->mirror_x_ ? "ON" : "OFF", 
-               this->mirror_y_ ? "ON" : "OFF");
+      this->mark_failed();
+      return;
     }
-  }
-
-  // ✅ Initialiser le mode direct si demandé
-  if (this->direct_mode_) {
-    if (!this->init_direct_mode_()) {
-      ESP_LOGE(TAG, "❌ Failed to initialize direct mode");
-      if (!this->canvas_obj_) {
-        ESP_LOGE(TAG, "❌ No canvas configured, cannot fallback");
-        this->mark_failed();
-        return;
-      }
-      ESP_LOGW(TAG, "⚠️  Falling back to canvas mode");
-      this->direct_mode_ = false;
-    } else {
-      ESP_LOGI(TAG, "✅ Direct mode initialized");
-    }
+    ESP_LOGI(TAG, "✅ PPA initialized (rotation=%d°, mirror_x=%s, mirror_y=%s)",
+             this->rotation_, this->mirror_x_ ? "ON" : "OFF", 
+             this->mirror_y_ ? "ON" : "OFF");
   }
 
   ESP_LOGI(TAG, "✅ V4L2 pipeline ready");
@@ -114,8 +90,7 @@ void LVGLCameraDisplay::setup() {
   ESP_LOGI(TAG, "   Resolution: %ux%u", this->width_, this->height_);
   ESP_LOGI(TAG, "   Target FPS: %.1f", 1000.0f / this->update_interval_);
   ESP_LOGI(TAG, "   Buffers: %d x %u bytes", VIDEO_BUFFER_COUNT, this->buffer_length_);
-  ESP_LOGI(TAG, "   PPA: %s", this->use_ppa_ ? "ENABLED" : "DISABLED");
-  ESP_LOGI(TAG, "   Mode: %s", this->direct_mode_ ? "DIRECT" : "CANVAS");
+  ESP_LOGI(TAG, "   PPA: %s", (this->rotation_ != ROTATION_0 || this->mirror_x_ || this->mirror_y_) ? "ENABLED" : "DISABLED");
 #else
   ESP_LOGE(TAG, "❌ V4L2 pipeline requires ESP32-P4");
   this->mark_failed();
@@ -135,6 +110,9 @@ bool LVGLCameraDisplay::open_v4l2_device_() {
   }
 
   ESP_LOGI(TAG, "✅ V4L2 device opened (fd=%d)", this->video_fd_);
+  
+  // ✅ SUPPRIMÉ: Plus besoin d'enregistrer manuellement le fd
+  // Le device_num est encodé dans le fd lui-même
   
   // Query capabilities
   struct v4l2_capability cap;
@@ -217,7 +195,7 @@ bool LVGLCameraDisplay::setup_v4l2_format_() {
 bool LVGLCameraDisplay::setup_v4l2_buffers_() {
   ESP_LOGI(TAG, "Requesting %d V4L2 buffers...", VIDEO_BUFFER_COUNT);
 
-  // Demander les buffers
+  // Demander les buffers (comme M5Stack)
   struct v4l2_requestbuffers req = {};
   req.count = VIDEO_BUFFER_COUNT;
   req.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
@@ -234,7 +212,7 @@ bool LVGLCameraDisplay::setup_v4l2_buffers_() {
 
   ESP_LOGI(TAG, "Allocated %u buffers", req.count);
 
-  // Mapper et queue les buffers
+  // Mapper et queue les buffers (comme M5Stack)
   for (uint32_t i = 0; i < req.count; i++) {
     struct v4l2_buffer buf = {};
     buf.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
@@ -247,7 +225,7 @@ bool LVGLCameraDisplay::setup_v4l2_buffers_() {
       return false;
     }
 
-    // Mapper le buffer
+    // Mapper le buffer (comme M5Stack)
     this->mmap_buffers_[i] = (uint8_t*)mmap(
       NULL,
       buf.length,
@@ -265,7 +243,7 @@ bool LVGLCameraDisplay::setup_v4l2_buffers_() {
     ESP_LOGD(TAG, "Buffer %u: mapped at %p, length=%u, offset=%u",
              i, this->mmap_buffers_[i], buf.length, buf.m.offset);
 
-    // Queue le buffer AVANT de démarrer le streaming
+    // ⚠️ IMPORTANT : Queue le buffer AVANT de démarrer le streaming
     if (ioctl(this->video_fd_, VIDIOC_QBUF, &buf) < 0) {
       ESP_LOGE(TAG, "VIDIOC_QBUF failed for buffer %u: errno=%d", i, errno);
       return false;
@@ -277,7 +255,6 @@ bool LVGLCameraDisplay::setup_v4l2_buffers_() {
   ESP_LOGI(TAG, "✅ V4L2 buffers ready (all %u buffers queued)", req.count);
   return true;
 }
-
 bool LVGLCameraDisplay::start_v4l2_streaming_() {
   ESP_LOGI(TAG, "Starting V4L2 streaming...");
 
@@ -297,7 +274,7 @@ bool LVGLCameraDisplay::capture_v4l2_frame_(uint8_t **frame_data) {
     return false;
   }
 
-  // Dequeue un buffer
+  // Dequeue un buffer (comme M5Stack)
   struct v4l2_buffer buf = {};
   buf.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
   buf.memory = V4L2_MEMORY_MMAP;
@@ -364,8 +341,6 @@ void LVGLCameraDisplay::cleanup_v4l2_() {
 }
 
 bool LVGLCameraDisplay::init_ppa_() {
-  ESP_LOGI(TAG, "Initializing PPA...");
-  
   ppa_client_config_t ppa_config = {
     .oper_type = PPA_OPERATION_SRM,
     .max_pending_trans_num = 1,
@@ -385,28 +360,22 @@ bool LVGLCameraDisplay::init_ppa_() {
     std::swap(width, height);
   }
 
-  // ✅ Ne créer le transform_buffer que si on n'est PAS en mode direct
-  // En mode direct, PPA écrira directement dans le framebuffer LVGL
-  if (!this->direct_mode_) {
-    this->transform_buffer_size_ = width * height * 2;  // RGB565
-    this->transform_buffer_ = (uint8_t*)heap_caps_aligned_alloc(
-      64,
-      this->transform_buffer_size_,
-      MALLOC_CAP_SPIRAM
-    );
+  this->transform_buffer_size_ = width * height * 2;  // RGB565
+  this->transform_buffer_ = (uint8_t*)heap_caps_aligned_alloc(
+    64,
+    this->transform_buffer_size_,
+    MALLOC_CAP_SPIRAM
+  );
 
-    if (!this->transform_buffer_) {
-      ESP_LOGE(TAG, "Failed to allocate transform buffer");
-      ppa_unregister_client(this->ppa_handle_);
-      this->ppa_handle_ = nullptr;
-      return false;
-    }
-
-    ESP_LOGI(TAG, "PPA transform buffer: %ux%u @ %u bytes", 
-             width, height, this->transform_buffer_size_);
-  } else {
-    ESP_LOGI(TAG, "PPA will write directly to LVGL framebuffer (no intermediate buffer)");
+  if (!this->transform_buffer_) {
+    ESP_LOGE(TAG, "Failed to allocate transform buffer");
+    ppa_unregister_client(this->ppa_handle_);
+    this->ppa_handle_ = nullptr;
+    return false;
   }
+
+  ESP_LOGI(TAG, "PPA transform buffer: %ux%u @ %u bytes", 
+           width, height, this->transform_buffer_size_);
   
   return true;
 }
@@ -428,7 +397,7 @@ bool LVGLCameraDisplay::transform_frame_(const uint8_t *src, uint8_t *dst) {
     return false;
   }
 
-  // Configuration PPA
+  // Configuration PPA identique à M5Stack
   ppa_srm_oper_config_t srm_config = {};
   
   srm_config.in.buffer = (void*)src;
@@ -446,7 +415,7 @@ bool LVGLCameraDisplay::transform_frame_(const uint8_t *src, uint8_t *dst) {
                    ? this->width_ : this->height_;
   
   srm_config.out.buffer = dst;
-  srm_config.out.buffer_size = out_w * out_h * 2;  // RGB565
+  srm_config.out.buffer_size = this->transform_buffer_size_;
   srm_config.out.pic_w = out_w;
   srm_config.out.pic_h = out_h;
   srm_config.out.block_offset_x = 0;
@@ -473,123 +442,19 @@ bool LVGLCameraDisplay::transform_frame_(const uint8_t *src, uint8_t *dst) {
   return true;
 }
 
-// ✅ Initialiser le mode d'affichage direct
-bool LVGLCameraDisplay::init_direct_mode_() {
-  ESP_LOGI(TAG, "Initializing direct display mode...");
-  
-  // Récupérer le display LVGL
-  this->lvgl_display_ = lv_disp_get_default();
-  if (!this->lvgl_display_) {
-    ESP_LOGE(TAG, "No LVGL display found");
-    return false;
-  }
-  
-  // Récupérer le draw buffer (qui contient le framebuffer)
-  this->lvgl_draw_buf_ = lv_disp_get_draw_buf(this->lvgl_display_);
-  if (!this->lvgl_draw_buf_) {
-    ESP_LOGE(TAG, "No LVGL draw buffer found");
-    return false;
-  }
-  
-  // Récupérer le pointeur vers le framebuffer principal
-  this->lvgl_framebuffer_ = (uint8_t*)this->lvgl_draw_buf_->buf1;
-  if (!this->lvgl_framebuffer_) {
-    ESP_LOGE(TAG, "No LVGL framebuffer found");
-    return false;
-  }
-  
-  // Calculer la taille du framebuffer
-  uint16_t fb_width = this->width_;
-  uint16_t fb_height = this->height_;
-  
-  // Ajuster selon rotation
-  if (this->rotation_ == ROTATION_90 || this->rotation_ == ROTATION_270) {
-    std::swap(fb_width, fb_height);
-  }
-  
-  this->lvgl_framebuffer_size_ = fb_width * fb_height * 2; // RGB565
-  
-  // Vérifier l'alignement du framebuffer pour PPA
-  uintptr_t fb_addr = (uintptr_t)this->lvgl_framebuffer_;
-  if (fb_addr % 64 != 0) {
-    ESP_LOGW(TAG, "⚠️  Framebuffer not 64-byte aligned (%p), may impact PPA performance", 
-             this->lvgl_framebuffer_);
-  }
-  
-  ESP_LOGI(TAG, "✅ Direct mode ready:");
-  ESP_LOGI(TAG, "   Framebuffer: %p (%u bytes)", 
-           this->lvgl_framebuffer_, this->lvgl_framebuffer_size_);
-  ESP_LOGI(TAG, "   Resolution: %ux%u", fb_width, fb_height);
-  ESP_LOGI(TAG, "   Alignment: %s", (fb_addr % 64 == 0) ? "64-byte (optimal)" : "not optimal");
-  
-  return true;
-}
+#endif
 
-// ✅ Mise à jour en mode direct (PPA → framebuffer LVGL) - OPTIMISÉ
-void LVGLCameraDisplay::update_direct_mode_() {
-  // Capturer une frame via V4L2
-  uint8_t *frame_data = nullptr;
-  if (!this->capture_v4l2_frame_(&frame_data)) {
-    this->drop_count_++;
+void LVGLCameraDisplay::loop() {
+#ifdef USE_ESP32_VARIANT_ESP32P4
+  if (!this->v4l2_streaming_) {
     return;
   }
 
-  if (!frame_data || !this->lvgl_framebuffer_) {
-    this->release_v4l2_frame_();
+  uint32_t now = millis();
+  if (now - this->last_update_time_ < this->update_interval_) {
     return;
   }
-
-  // ✅ OPTIMISATION : Flux direct V4L2 → PPA → framebuffer LVGL
-  bool success = false;
-  
-  if (this->use_ppa_ && this->ppa_handle_ && 
-      (this->rotation_ != ROTATION_0 || this->mirror_x_ || this->mirror_y_)) {
-    // PPA transforme directement vers le framebuffer LVGL
-    success = this->transform_frame_(frame_data, this->lvgl_framebuffer_);
-    
-    if (success) {
-      // ✅ Synchroniser le cache pour que LVGL voit les données
-      esp_err_t ret = esp_cache_msync(
-        this->lvgl_framebuffer_, 
-        this->lvgl_framebuffer_size_,
-        ESP_CACHE_MSYNC_FLAG_DIR_M2C | ESP_CACHE_MSYNC_FLAG_UNALIGNED
-      );
-      if (ret != ESP_OK) {
-        ESP_LOGD(TAG, "Cache sync warning: 0x%x", ret);
-      }
-    } else {
-      ESP_LOGW(TAG, "PPA transform failed");
-    }
-  }
-  
-  // Si PPA a échoué ou n'est pas utilisé, copie directe
-  if (!success) {
-    size_t copy_size = std::min(this->buffer_length_, this->lvgl_framebuffer_size_);
-    memcpy(this->lvgl_framebuffer_, frame_data, copy_size);
-    
-    // Synchroniser le cache
-    esp_cache_msync(
-      this->lvgl_framebuffer_, 
-      this->lvgl_framebuffer_size_,
-      ESP_CACHE_MSYNC_FLAG_DIR_M2C | ESP_CACHE_MSYNC_FLAG_UNALIGNED
-    );
-  }
-
-  // Libérer la frame V4L2 immédiatement
-  this->release_v4l2_frame_();
-
-  // ✅ Invalider uniquement la zone nécessaire dans LVGL
-  lv_obj_invalidate(lv_scr_act());
-  
-  this->frame_count_++;
-}
-
-// Mode canvas (ancien mode - pour fallback)
-void LVGLCameraDisplay::update_canvas_mode_() {
-  if (!this->canvas_obj_) {
-    ESP_LOGW(TAG, "No canvas configured");
-    return;
-  }
+  this->last_update_time_ = now;
 
   // Capturer une frame via V4L2
   uint8_t *frame_data = nullptr;
@@ -608,9 +473,7 @@ void LVGLCameraDisplay::update_canvas_mode_() {
   uint16_t canvas_height = this->height_;
   
   // Appliquer PPA si nécessaire (rotation/mirror)
-  if (this->use_ppa_ && this->ppa_handle_ && this->transform_buffer_ &&
-      (this->rotation_ != ROTATION_0 || this->mirror_x_ || this->mirror_y_)) {
-    
+  if (this->ppa_handle_ && this->transform_buffer_) {
     if (this->rotation_ == ROTATION_90 || this->rotation_ == ROTATION_270) {
       canvas_width = this->height_;
       canvas_height = this->width_;
@@ -621,47 +484,33 @@ void LVGLCameraDisplay::update_canvas_mode_() {
     }
   }
 
-  // Afficher sur le canvas LVGL
-  lv_canvas_set_buffer(this->canvas_obj_, display_buffer, 
-                       canvas_width, canvas_height, LV_IMG_CF_TRUE_COLOR);
-  lv_obj_invalidate(this->canvas_obj_);
+  // Afficher sur le canvas LVGL (avec lock comme M5Stack)
+  if (this->canvas_obj_) {
+    // Lock display avant update
+    lv_disp_t *disp = lv_obj_get_disp(this->canvas_obj_);
+    if (disp) {
+      _lv_disp_refr_timer(NULL);
+    }
 
-  // Re-queue le buffer V4L2
+    // Update canvas
+    lv_canvas_set_buffer(this->canvas_obj_, display_buffer, 
+                         canvas_width, canvas_height, LV_IMG_CF_TRUE_COLOR);
+    lv_obj_invalidate(this->canvas_obj_);
+  }
+
+  // ⚠️ IMPORTANT : Re-queue IMMÉDIATEMENT après usage (comme M5Stack)
   this->release_v4l2_frame_();
 
   this->frame_count_++;
-}
 
-#endif
-
-void LVGLCameraDisplay::loop() {
-#ifdef USE_ESP32_VARIANT_ESP32P4
-  if (!this->v4l2_streaming_) {
-    return;
-  }
-
-  uint32_t now = millis();
-  if (now - this->last_update_time_ < this->update_interval_) {
-    return;
-  }
-  this->last_update_time_ = now;
-
-  // ✅ Choisir le mode d'affichage
-  if (this->direct_mode_) {
-    this->update_direct_mode_();
-  } else {
-    this->update_canvas_mode_();
-  }
-
-  // Log FPS périodique
+  // Log FPS
   if (this->first_update_) {
     this->first_update_ = false;
     this->last_fps_time_ = now;
   } else if (now - this->last_fps_time_ >= 5000) {
     float fps = this->frame_count_ * 1000.0f / (now - this->last_fps_time_);
     float drop_rate = (this->drop_count_ * 100.0f) / (this->frame_count_ + this->drop_count_);
-    ESP_LOGI(TAG, "📊 Display (%s): %.1f FPS | Drops: %u (%.1f%%)", 
-             this->direct_mode_ ? "DIRECT" : "CANVAS",
+    ESP_LOGI(TAG, "📊 Display: %.1f FPS | Drops: %u (%.1f%%)", 
              fps, this->drop_count_, drop_rate);
     this->frame_count_ = 0;
     this->drop_count_ = 0;
@@ -678,15 +527,10 @@ void LVGLCameraDisplay::dump_config() {
   ESP_LOGCONFIG(TAG, "  Rotation: %d°", this->rotation_);
   ESP_LOGCONFIG(TAG, "  Mirror X: %s", this->mirror_x_ ? "ON" : "OFF");
   ESP_LOGCONFIG(TAG, "  Mirror Y: %s", this->mirror_y_ ? "ON" : "OFF");
-  ESP_LOGCONFIG(TAG, "  Display mode: %s", this->direct_mode_ ? "DIRECT (hardware)" : "CANVAS (software)");
-  ESP_LOGCONFIG(TAG, "  PPA: %s", this->use_ppa_ ? "ENABLED" : "DISABLED");
 #ifdef USE_ESP32_VARIANT_ESP32P4
   ESP_LOGCONFIG(TAG, "  V4L2 Device: %s", this->video_device_);
   ESP_LOGCONFIG(TAG, "  V4L2 FD: %d", this->video_fd_);
-  if (this->direct_mode_) {
-    ESP_LOGCONFIG(TAG, "  Framebuffer: %p (%u bytes)", 
-                  this->lvgl_framebuffer_, this->lvgl_framebuffer_size_);
-  }
+  ESP_LOGCONFIG(TAG, "  PPA: %s", this->ppa_handle_ ? "Enabled" : "Disabled");
 #endif
 }
 
