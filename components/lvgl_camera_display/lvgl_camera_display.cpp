@@ -13,6 +13,9 @@ namespace lvgl_camera_display {
 
 static const char *const TAG = "lvgl_camera_display";
 
+// ✅ NOUVEAU : Descripteur d'image global pour le canvas
+static lv_img_dsc_t camera_img_dsc;
+
 void LVGLCameraDisplay::setup() {
   ESP_LOGCONFIG(TAG, "🎥 LVGL Camera Display");
   ESP_LOGCONFIG(TAG, "  Mode: %s", this->direct_mode_ ? "DIRECT (DMA/PPA)" : "CANVAS (software)");
@@ -575,7 +578,7 @@ void LVGLCameraDisplay::update_direct_mode_() {
   this->frame_count_++;
 }
 
-// ✅ CORRECTION POUR LVGL 8.4.0
+// ✅ SOLUTION DÉFINITIVE : Utiliser lv_img_set_src au lieu de lv_canvas_set_buffer
 void LVGLCameraDisplay::update_canvas_mode_() {
   if (!this->canvas_obj_) {
     ESP_LOGW(TAG, "No canvas configured");
@@ -610,19 +613,20 @@ void LVGLCameraDisplay::update_canvas_mode_() {
     }
   }
 
-  // ✅ API LVGL 8.4.0 correcte
-  lv_canvas_set_buffer(
-    this->canvas_obj_, 
-    display_buffer, 
-    canvas_width, 
-    canvas_height, 
-    LV_IMG_CF_TRUE_COLOR
-  );
+  // ✅ SOLUTION : Utiliser lv_img_set_src avec un descripteur d'image
+  // au lieu de lv_canvas_set_buffer qui n'est pas disponible
+  camera_img_dsc.header.always_zero = 0;
+  camera_img_dsc.header.w = canvas_width;
+  camera_img_dsc.header.h = canvas_height;
+  camera_img_dsc.data_size = canvas_width * canvas_height * 2;
+  camera_img_dsc.header.cf = LV_IMG_CF_TRUE_COLOR;  // RGB565
+  camera_img_dsc.data = display_buffer;
   
+  // Utiliser le canvas comme une image
+  lv_img_set_src(this->canvas_obj_, &camera_img_dsc);
   lv_obj_invalidate(this->canvas_obj_);
 
   this->release_v4l2_frame_();
-
   this->frame_count_++;
 }
 
