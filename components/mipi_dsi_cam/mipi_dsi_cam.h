@@ -79,10 +79,14 @@ public:
   void set_jpeg_quality(uint8_t quality) { this->jpeg_quality_ = quality; }
   void set_framerate(uint8_t fps) { this->framerate_ = fps; }
   
-  // Configuration V4L2 et ISP
+  // Configuration V4L2, ISP et encodeurs
   void set_enable_v4l2(bool enable) { this->enable_v4l2_on_setup_ = enable; }
   void set_enable_isp(bool enable) { this->enable_isp_on_setup_ = enable; }
-  
+
+  // ✅ Nouveaux setters pour les encodeurs
+  void set_enable_jpeg(bool enable) { this->enable_jpeg_on_setup_ = enable; }
+  void set_enable_h264(bool enable) { this->enable_h264_on_setup_ = enable; }
+
   // Getters
   std::string get_name() const { return this->name_; }
   uint16_t get_image_width() const { return this->width_; }
@@ -200,6 +204,10 @@ protected:
   MipiDsiCamISPPipeline *isp_pipeline_{nullptr};
   bool enable_v4l2_on_setup_{false};
   bool enable_isp_on_setup_{false};
+
+  // ✅ Nouveaux drapeaux encodeurs
+  bool enable_jpeg_on_setup_{false};
+  bool enable_h264_on_setup_{false};
   
   // Méthodes d'initialisation
   bool create_sensor_driver_();
@@ -233,6 +241,7 @@ extern ISensorDriver* create_sensor_driver(const std::string& sensor_type, i2c::
 } // namespace esphome
 
 #endif // USE_ESP32_VARIANT_ESP32P4
+
 
 
 
