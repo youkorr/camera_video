@@ -144,7 +144,7 @@ protected:
   // Paramètres capteur
   uint8_t lane_count_{1};
   uint8_t bayer_pattern_{0};
-  uint16_t lane_bitrate_mbps_{400};
+  uint16_t lane_bitrate_mbps_{576};
   uint16_t width_{1280};
   uint16_t height_{720};
   uint8_t framerate_{30};
@@ -188,7 +188,7 @@ protected:
   // White Balance
   bool auto_white_balance_enabled_{false};
   float wb_red_gain_{1.0f};
-  float wb_green_gain_{0.3f};
+  float wb_green_gain_{1.0f};
   float wb_blue_gain_{1.0f};
   uint16_t wb_red_gain_fixed_{256};
   uint16_t wb_green_gain_fixed_{256};
