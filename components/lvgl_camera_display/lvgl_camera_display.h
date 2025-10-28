@@ -2,8 +2,10 @@
 
 #include "esphome/core/component.h"
 #include "esphome/core/hal.h"
-#include "lvgl.h"
 #include "esphome/components/lvgl/lvgl_esphome.h"
+
+// ✅ AJOUT : Include explicite pour lv_canvas
+#include "lvgl.h"
 
 #ifdef USE_ESP32_VARIANT_ESP32P4
 #include <fcntl.h>
@@ -13,14 +15,12 @@
 #include "../mipi_dsi_cam/esp_video_device.h"
 #include "../mipi_dsi_cam/mipi_dsi_cam.h"
 #include "driver/ppa.h"
-#include "freertos/FreeRTOS.h"
-#include "freertos/task.h"
-#include "freertos/semphr.h"
 #endif
 
 namespace esphome {
 namespace lvgl_camera_display {
 
+// Configuration
 #define VIDEO_BUFFER_COUNT 2
 
 enum RotationAngle {
@@ -47,9 +47,6 @@ class LVGLCameraDisplay : public Component {
   
   void set_direct_mode(bool enable) { this->direct_mode_ = enable; }
   void set_use_ppa(bool enable) { this->use_ppa_ = enable; }
-
-  // ✅ NOUVEAU : Arrêt propre
-  void stop_capture();
 
  protected:
   mipi_dsi_cam::MipiDsiCam *camera_{nullptr};
@@ -81,11 +78,6 @@ class LVGLCameraDisplay : public Component {
   uint8_t *aligned_buffer_{nullptr};
   size_t aligned_buffer_size_{0};
   
-  // ✅ NOUVEAU : Tâche dédiée comme M5Stack
-  TaskHandle_t capture_task_handle_{nullptr};
-  SemaphoreHandle_t display_mutex_{nullptr};
-  volatile bool task_running_{false};
-  
   // Méthodes V4L2
   bool open_v4l2_device_();
   bool setup_v4l2_format_();
@@ -104,10 +96,6 @@ class LVGLCameraDisplay : public Component {
   bool init_direct_mode_();
   void update_direct_mode_();
   void update_canvas_mode_();
-  
-  // ✅ NOUVEAU : Tâche de capture dédiée (comme M5Stack)
-  static void capture_task_(void *param);
-  void capture_loop_();
 #endif
 
   lv_obj_t *canvas_obj_{nullptr};
