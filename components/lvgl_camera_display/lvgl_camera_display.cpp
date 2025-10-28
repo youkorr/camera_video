@@ -13,11 +13,11 @@ namespace lvgl_camera_display {
 
 static const char *const TAG = "lvgl_camera_display";
 
-// ✅ NOUVEAU : Descripteur d'image global pour le canvas
+// ✅ Descripteur d'image global pour le canvas (LVGL 8)
 static lv_img_dsc_t camera_img_dsc;
 
 void LVGLCameraDisplay::setup() {
-  ESP_LOGCONFIG(TAG, "🎥 LVGL Camera Display");
+  ESP_LOGCONFIG(TAG, "🎥 LVGL Camera Display (Task-based)");
   ESP_LOGCONFIG(TAG, "  Mode: %s", this->direct_mode_ ? "DIRECT (DMA/PPA)" : "CANVAS (software)");
   ESP_LOGCONFIG(TAG, "  PPA: %s", this->use_ppa_ ? "ENABLED" : "DISABLED");
 
@@ -73,7 +73,7 @@ void LVGLCameraDisplay::setup() {
     return;
   }
 
-  if (this->use_ppa_ && (this->rotation_ != ROTATION_0 || this->mirror_x_ || this->mirror_y_ || this->direct_mode_)) {
+  if (this->use_ppa_) {
     if (!this->init_ppa_()) {
       ESP_LOGE(TAG, "❌ Failed to initialize PPA");
       this->use_ppa_ = false;
@@ -100,6 +100,33 @@ void LVGLCameraDisplay::setup() {
     }
   }
 
+  // ✅ CRITIQUE : Créer le mutex pour protéger l'accès au display
+  this->display_mutex_ = xSemaphoreCreateMutex();
+  if (!this->display_mutex_) {
+    ESP_LOGE(TAG, "❌ Failed to create display mutex");
+    this->mark_failed();
+    return;
+  }
+
+  // ✅ CRITIQUE : Créer la tâche de capture dédiée (comme M5Stack)
+  this->task_running_ = true;
+  BaseType_t ret = xTaskCreatePinnedToCore(
+    capture_task_,              // Fonction de la tâche
+    "camera_capture",           // Nom
+    8 * 1024,                   // Stack size (8KB comme M5Stack)
+    this,                       // Paramètre (pointeur vers this)
+    5,                          // Priorité 5 (comme M5Stack)
+    &this->capture_task_handle_,// Handle
+    1                           // Core 1 (comme M5Stack)
+  );
+
+  if (ret != pdPASS) {
+    ESP_LOGE(TAG, "❌ Failed to create capture task");
+    this->task_running_ = false;
+    this->mark_failed();
+    return;
+  }
+
   ESP_LOGI(TAG, "✅ V4L2 pipeline ready");
   ESP_LOGI(TAG, "   Device: %s", this->video_device_);
   ESP_LOGI(TAG, "   Resolution: %ux%u", this->width_, this->height_);
@@ -107,6 +134,7 @@ void LVGLCameraDisplay::setup() {
   ESP_LOGI(TAG, "   Buffers: %d x %u bytes", VIDEO_BUFFER_COUNT, this->buffer_length_);
   ESP_LOGI(TAG, "   PPA: %s", this->use_ppa_ ? "ENABLED" : "DISABLED");
   ESP_LOGI(TAG, "   Mode: %s", this->direct_mode_ ? "DIRECT" : "CANVAS");
+  ESP_LOGI(TAG, "   ✅ Capture task running on core 1");
 #else
   ESP_LOGE(TAG, "❌ V4L2 pipeline requires ESP32-P4");
   this->mark_failed();
@@ -114,6 +142,134 @@ void LVGLCameraDisplay::setup() {
 }
 
 #ifdef USE_ESP32_VARIANT_ESP32P4
+
+// ✅ NOUVEAU : Tâche de capture (comme M5Stack)
+void LVGLCameraDisplay::capture_task_(void *param) {
+  LVGLCameraDisplay *self = (LVGLCameraDisplay *)param;
+  ESP_LOGI(TAG, "📹 Capture task started on core %d", xPortGetCoreID());
+  self->capture_loop_();
+  ESP_LOGI(TAG, "📹 Capture task ended");
+  vTaskDelete(NULL);
+}
+
+// ✅ NOUVEAU : Boucle de capture (VRAIE solution 30 FPS)
+void LVGLCameraDisplay::capture_loop_() {
+  uint32_t frame_count = 0;
+  uint32_t drop_count = 0;
+  uint32_t last_fps_time = millis();
+
+  while (this->task_running_) {
+    uint8_t *frame_data = nullptr;
+    
+    // Capturer une frame
+    if (!this->capture_v4l2_frame_(&frame_data)) {
+      drop_count++;
+      vTaskDelay(pdMS_TO_TICKS(1));
+      continue;
+    }
+
+    if (!frame_data) {
+      this->release_v4l2_frame_();
+      continue;
+    }
+
+    // Mode canvas
+    if (!this->direct_mode_ && this->canvas_obj_) {
+      uint8_t *display_buffer = frame_data;
+      uint16_t canvas_width = this->width_;
+      uint16_t canvas_height = this->height_;
+      
+      // Transform avec PPA si nécessaire
+      if (this->use_ppa_ && this->ppa_handle_ && this->transform_buffer_ &&
+          (this->rotation_ != ROTATION_0 || this->mirror_x_ || this->mirror_y_)) {
+        
+        if (this->rotation_ == ROTATION_90 || this->rotation_ == ROTATION_270) {
+          canvas_width = this->height_;
+          canvas_height = this->width_;
+        }
+        
+        if (this->transform_frame_(frame_data, this->transform_buffer_)) {
+          display_buffer = this->transform_buffer_;
+        }
+      }
+
+      // ✅ CRITIQUE : Lock display (comme M5Stack avec bsp_display_lock)
+      if (xSemaphoreTake(this->display_mutex_, pdMS_TO_TICKS(10)) == pdTRUE) {
+        // Mettre à jour le canvas avec l'API image
+        camera_img_dsc.header.always_zero = 0;
+        camera_img_dsc.header.w = canvas_width;
+        camera_img_dsc.header.h = canvas_height;
+        camera_img_dsc.data_size = canvas_width * canvas_height * 2;
+        camera_img_dsc.header.cf = LV_IMG_CF_TRUE_COLOR;  // LVGL 8
+        camera_img_dsc.data = display_buffer;
+        
+        lv_img_set_src(this->canvas_obj_, &camera_img_dsc);
+        lv_obj_invalidate(this->canvas_obj_);
+        
+        xSemaphoreGive(this->display_mutex_);
+      }
+    }
+    // Mode direct
+    else if (this->direct_mode_ && this->lvgl_framebuffer_) {
+      bool success = false;
+      
+      uint8_t *dest_buffer = this->aligned_buffer_ ? this->aligned_buffer_ : this->lvgl_framebuffer_;
+      size_t dest_size = this->aligned_buffer_ ? this->aligned_buffer_size_ : this->lvgl_framebuffer_size_;
+      
+      if (this->use_ppa_ && this->ppa_handle_ && 
+          (this->rotation_ != ROTATION_0 || this->mirror_x_ || this->mirror_y_)) {
+        
+        success = this->transform_frame_(frame_data, dest_buffer);
+        
+        if (success) {
+          esp_err_t ret;
+          if (this->aligned_buffer_) {
+            ret = esp_cache_msync(dest_buffer, dest_size, ESP_CACHE_MSYNC_FLAG_DIR_M2C);
+          } else {
+            ret = esp_cache_msync(dest_buffer, dest_size, 
+                                  ESP_CACHE_MSYNC_FLAG_DIR_M2C | ESP_CACHE_MSYNC_FLAG_UNALIGNED);
+          }
+          
+          if (this->aligned_buffer_) {
+            memcpy(this->lvgl_framebuffer_, this->aligned_buffer_, this->lvgl_framebuffer_size_);
+          }
+        }
+      }
+      
+      if (!success) {
+        size_t copy_size = std::min(this->buffer_length_, this->lvgl_framebuffer_size_);
+        memcpy(this->lvgl_framebuffer_, frame_data, copy_size);
+      }
+
+      // ✅ Lock pour invalider l'écran
+      if (xSemaphoreTake(this->display_mutex_, pdMS_TO_TICKS(10)) == pdTRUE) {
+        lv_obj_invalidate(lv_scr_act());
+        xSemaphoreGive(this->display_mutex_);
+      }
+    }
+
+    this->release_v4l2_frame_();
+    frame_count++;
+
+    // Statistiques FPS toutes les 5 secondes
+    uint32_t now = millis();
+    if (now - last_fps_time >= 5000) {
+      float fps = frame_count * 1000.0f / (now - last_fps_time);
+      float drop_rate = (drop_count * 100.0f) / (frame_count + drop_count);
+      ESP_LOGI(TAG, "📊 Display (%s): %.1f FPS | Drops: %u (%.1f%%)", 
+               this->direct_mode_ ? "DIRECT" : "CANVAS",
+               fps, drop_count, drop_rate);
+      frame_count = 0;
+      drop_count = 0;
+      last_fps_time = now;
+    }
+
+    // ✅ Délai comme M5Stack (10ms = 100 FPS max)
+    vTaskDelay(pdMS_TO_TICKS(10));
+  }
+}
+
+// ... (fonctions V4L2 inchangées - je les mets pour avoir le fichier complet) ...
 
 bool LVGLCameraDisplay::open_v4l2_device_() {
   ESP_LOGI(TAG, "Opening V4L2 device: %s", this->video_device_);
@@ -518,156 +674,50 @@ bool LVGLCameraDisplay::init_direct_mode_() {
 }
 
 void LVGLCameraDisplay::update_direct_mode_() {
-  uint8_t *frame_data = nullptr;
-  if (!this->capture_v4l2_frame_(&frame_data)) {
-    this->drop_count_++;
-    return;
-  }
-
-  if (!frame_data || !this->lvgl_framebuffer_) {
-    this->release_v4l2_frame_();
-    return;
-  }
-
-  bool success = false;
-  
-  uint8_t *dest_buffer = this->aligned_buffer_ ? this->aligned_buffer_ : this->lvgl_framebuffer_;
-  size_t dest_size = this->aligned_buffer_ ? this->aligned_buffer_size_ : this->lvgl_framebuffer_size_;
-  
-  if (this->use_ppa_ && this->ppa_handle_ && 
-      (this->rotation_ != ROTATION_0 || this->mirror_x_ || this->mirror_y_)) {
-    
-    success = this->transform_frame_(frame_data, dest_buffer);
-    
-    if (success) {
-      esp_err_t ret;
-      if (this->aligned_buffer_) {
-        ret = esp_cache_msync(
-          dest_buffer, 
-          dest_size,
-          ESP_CACHE_MSYNC_FLAG_DIR_M2C
-        );
-      } else {
-        ret = esp_cache_msync(
-          dest_buffer, 
-          dest_size,
-          ESP_CACHE_MSYNC_FLAG_DIR_M2C | ESP_CACHE_MSYNC_FLAG_UNALIGNED
-        );
-      }
-      
-      if (ret != ESP_OK) {
-        ESP_LOGV(TAG, "Cache sync warning: 0x%x", ret);
-      }
-      
-      if (this->aligned_buffer_) {
-        memcpy(this->lvgl_framebuffer_, this->aligned_buffer_, this->lvgl_framebuffer_size_);
-      }
-    } else {
-      ESP_LOGW(TAG, "PPA transform failed");
-    }
-  }
-  
-  if (!success) {
-    size_t copy_size = std::min(this->buffer_length_, this->lvgl_framebuffer_size_);
-    memcpy(this->lvgl_framebuffer_, frame_data, copy_size);
-  }
-
-  this->release_v4l2_frame_();
-  lv_obj_invalidate(lv_scr_act());
-  
-  this->frame_count_++;
+  // ⚠️ Cette fonction n'est plus utilisée avec la tâche dédiée
+  ESP_LOGW(TAG, "update_direct_mode_() should not be called with task-based capture");
 }
 
-// ✅ SOLUTION DÉFINITIVE : Utiliser lv_img_set_src au lieu de lv_canvas_set_buffer
 void LVGLCameraDisplay::update_canvas_mode_() {
-  if (!this->canvas_obj_) {
-    ESP_LOGW(TAG, "No canvas configured");
-    return;
-  }
+  // ⚠️ Cette fonction n'est plus utilisée avec la tâche dédiée
+  ESP_LOGW(TAG, "update_canvas_mode_() should not be called with task-based capture");
+}
 
-  uint8_t *frame_data = nullptr;
-  if (!this->capture_v4l2_frame_(&frame_data)) {
-    this->drop_count_++;
-    return;
-  }
-
-  if (!frame_data) {
-    this->release_v4l2_frame_();
-    return;
-  }
-
-  uint8_t *display_buffer = frame_data;
-  uint16_t canvas_width = this->width_;
-  uint16_t canvas_height = this->height_;
+void LVGLCameraDisplay::stop_capture() {
+  ESP_LOGI(TAG, "Stopping capture task...");
+  this->task_running_ = false;
   
-  if (this->use_ppa_ && this->ppa_handle_ && this->transform_buffer_ &&
-      (this->rotation_ != ROTATION_0 || this->mirror_x_ || this->mirror_y_)) {
-    
-    if (this->rotation_ == ROTATION_90 || this->rotation_ == ROTATION_270) {
-      canvas_width = this->height_;
-      canvas_height = this->width_;
+  if (this->capture_task_handle_) {
+    // Attendre que la tâche se termine (max 2 secondes)
+    uint32_t timeout = 2000;
+    uint32_t start = millis();
+    while (eTaskGetState(this->capture_task_handle_) != eDeleted && 
+           (millis() - start) < timeout) {
+      delay(10);
     }
-    
-    if (this->transform_frame_(frame_data, this->transform_buffer_)) {
-      display_buffer = this->transform_buffer_;
-    }
+    this->capture_task_handle_ = nullptr;
   }
-
-  // ✅ SOLUTION : Utiliser lv_img_set_src avec un descripteur d'image
-  // au lieu de lv_canvas_set_buffer qui n'est pas disponible
-  camera_img_dsc.header.always_zero = 0;
-  camera_img_dsc.header.w = canvas_width;
-  camera_img_dsc.header.h = canvas_height;
-  camera_img_dsc.data_size = canvas_width * canvas_height * 2;
-  camera_img_dsc.header.cf = LV_IMG_CF_TRUE_COLOR;  // RGB565
-  camera_img_dsc.data = display_buffer;
   
-  // Utiliser le canvas comme une image
-  lv_img_set_src(this->canvas_obj_, &camera_img_dsc);
-  lv_obj_invalidate(this->canvas_obj_);
-
-  this->release_v4l2_frame_();
-  this->frame_count_++;
+  this->cleanup_v4l2_();
+  
+  if (this->display_mutex_) {
+    vSemaphoreDelete(this->display_mutex_);
+    this->display_mutex_ = nullptr;
+  }
+  
+  ESP_LOGI(TAG, "✅ Capture stopped");
 }
 
 #endif
 
+// ✅ loop() ne fait plus rien - tout est dans la tâche
 void LVGLCameraDisplay::loop() {
-#ifdef USE_ESP32_VARIANT_ESP32P4
-  if (!this->v4l2_streaming_) {
-    return;
-  }
-
-  uint32_t now = millis();
-  if (now - this->last_update_time_ < this->update_interval_) {
-    return;
-  }
-  this->last_update_time_ = now;
-
-  if (this->direct_mode_) {
-    this->update_direct_mode_();
-  } else {
-    this->update_canvas_mode_();
-  }
-
-  if (this->first_update_) {
-    this->first_update_ = false;
-    this->last_fps_time_ = now;
-  } else if (now - this->last_fps_time_ >= 5000) {
-    float fps = this->frame_count_ * 1000.0f / (now - this->last_fps_time_);
-    float drop_rate = (this->drop_count_ * 100.0f) / (this->frame_count_ + this->drop_count_);
-    ESP_LOGI(TAG, "📊 Display (%s): %.1f FPS | Drops: %u (%.1f%%)", 
-             this->direct_mode_ ? "DIRECT" : "CANVAS",
-             fps, this->drop_count_, drop_rate);
-    this->frame_count_ = 0;
-    this->drop_count_ = 0;
-    this->last_fps_time_ = now;
-  }
-#endif
+  // La capture se fait dans la tâche dédiée
+  // Cette fonction est vide maintenant
 }
 
 void LVGLCameraDisplay::dump_config() {
-  ESP_LOGCONFIG(TAG, "LVGL Camera Display:");
+  ESP_LOGCONFIG(TAG, "LVGL Camera Display (Task-based):");
   ESP_LOGCONFIG(TAG, "  Camera: %s", this->camera_ ? "Connected" : "Not connected");
   ESP_LOGCONFIG(TAG, "  Resolution: %ux%u", this->width_, this->height_);
   ESP_LOGCONFIG(TAG, "  Update interval: %u ms", this->update_interval_);
@@ -676,17 +726,10 @@ void LVGLCameraDisplay::dump_config() {
   ESP_LOGCONFIG(TAG, "  Mirror Y: %s", this->mirror_y_ ? "ON" : "OFF");
   ESP_LOGCONFIG(TAG, "  Display mode: %s", this->direct_mode_ ? "DIRECT (hardware)" : "CANVAS (software)");
   ESP_LOGCONFIG(TAG, "  PPA: %s", this->use_ppa_ ? "ENABLED" : "DISABLED");
+  ESP_LOGCONFIG(TAG, "  Capture task: %s", this->task_running_ ? "RUNNING" : "STOPPED");
 #ifdef USE_ESP32_VARIANT_ESP32P4
   ESP_LOGCONFIG(TAG, "  V4L2 Device: %s", this->video_device_);
   ESP_LOGCONFIG(TAG, "  V4L2 FD: %d", this->video_fd_);
-  if (this->direct_mode_) {
-    ESP_LOGCONFIG(TAG, "  Framebuffer: %p (%u bytes)", 
-                  this->lvgl_framebuffer_, this->lvgl_framebuffer_size_);
-    if (this->aligned_buffer_) {
-      ESP_LOGCONFIG(TAG, "  Aligned buffer: %p (%u bytes)", 
-                    this->aligned_buffer_, this->aligned_buffer_size_);
-    }
-  }
 #endif
 }
 
