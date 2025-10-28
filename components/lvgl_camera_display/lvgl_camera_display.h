@@ -2,10 +2,10 @@
 
 #include "esphome/core/component.h"
 #include "esphome/core/hal.h"
-#include "esphome/components/lvgl/lvgl_esphome.h"
 
-// ✅ AJOUT : Include explicite pour lv_canvas
+// ✅ CORRECTION : Inclure lvgl.h pour avoir accès à lv_canvas_set_buffer
 #include "lvgl.h"
+#include "esphome/components/lvgl/lvgl_esphome.h"
 
 #ifdef USE_ESP32_VARIANT_ESP32P4
 #include <fcntl.h>
