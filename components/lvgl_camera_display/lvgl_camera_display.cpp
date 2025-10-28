@@ -6,7 +6,6 @@
 #include "esp_cache.h"
 #endif
 
-// ✅ Déclaration de la fonction externe (AVANT la classe)
 extern "C" void register_fd_to_device(int real_fd, int temp_fd);
 
 namespace esphome {
@@ -20,7 +19,6 @@ void LVGLCameraDisplay::setup() {
   ESP_LOGCONFIG(TAG, "  PPA: %s", this->use_ppa_ ? "ENABLED" : "DISABLED");
 
 #ifdef USE_ESP32_VARIANT_ESP32P4
-  // Récupérer la résolution depuis la caméra
   if (this->camera_) {
     this->width_ = this->camera_->get_image_width();
     this->height_ = this->camera_->get_image_height();
@@ -31,7 +29,6 @@ void LVGLCameraDisplay::setup() {
     return;
   }
 
-  // S'assurer que la caméra est initialisée et en streaming
   if (!this->camera_->is_streaming()) {
     ESP_LOGI(TAG, "Starting camera streaming...");
     if (!this->camera_->start_streaming()) {
@@ -41,49 +38,41 @@ void LVGLCameraDisplay::setup() {
     }
   }
 
-  // Activer l'adaptateur V4L2 pour avoir /dev/video0
   if (!this->camera_->get_v4l2_adapter()) {
     ESP_LOGI(TAG, "Enabling V4L2 adapter...");
     this->camera_->enable_v4l2_adapter();
     delay(100);
   }
 
-  // Attendre stabilisation
   delay(200);
 
-  // Ouvrir le device V4L2
   if (!this->open_v4l2_device_()) {
     ESP_LOGE(TAG, "❌ Failed to open V4L2 device");
     this->mark_failed();
     return;
   }
 
-  // Configurer le format V4L2
   if (!this->setup_v4l2_format_()) {
     ESP_LOGE(TAG, "❌ Failed to setup V4L2 format");
     this->mark_failed();
     return;
   }
 
-  // Configurer les buffers V4L2 avec mmap
   if (!this->setup_v4l2_buffers_()) {
     ESP_LOGE(TAG, "❌ Failed to setup V4L2 buffers");
     this->mark_failed();
     return;
   }
 
-  // Démarrer le streaming V4L2
   if (!this->start_v4l2_streaming_()) {
     ESP_LOGE(TAG, "❌ Failed to start V4L2 streaming");
     this->mark_failed();
     return;
   }
 
-  // ✅ Initialiser PPA si transformations nécessaires ou si use_ppa activé
   if (this->use_ppa_ && (this->rotation_ != ROTATION_0 || this->mirror_x_ || this->mirror_y_ || this->direct_mode_)) {
     if (!this->init_ppa_()) {
       ESP_LOGE(TAG, "❌ Failed to initialize PPA");
-      // Ne pas fail complètement, on peut continuer sans PPA
       this->use_ppa_ = false;
       ESP_LOGW(TAG, "⚠️  Continuing without PPA");
     } else {
@@ -93,7 +82,6 @@ void LVGLCameraDisplay::setup() {
     }
   }
 
-  // ✅ Initialiser le mode direct si demandé
   if (this->direct_mode_) {
     if (!this->init_direct_mode_()) {
       ESP_LOGE(TAG, "❌ Failed to initialize direct mode");
@@ -127,7 +115,6 @@ void LVGLCameraDisplay::setup() {
 bool LVGLCameraDisplay::open_v4l2_device_() {
   ESP_LOGI(TAG, "Opening V4L2 device: %s", this->video_device_);
   
-  // Ouvrir le device video
   this->video_fd_ = open(this->video_device_, O_RDONLY);
   if (this->video_fd_ < 0) {
     ESP_LOGE(TAG, "Failed to open %s: errno=%d", this->video_device_, errno);
@@ -136,7 +123,6 @@ bool LVGLCameraDisplay::open_v4l2_device_() {
 
   ESP_LOGI(TAG, "✅ V4L2 device opened (fd=%d)", this->video_fd_);
   
-  // Query capabilities
   struct v4l2_capability cap;
   if (ioctl(this->video_fd_, VIDIOC_QUERYCAP, &cap) < 0) {
     ESP_LOGE(TAG, "VIDIOC_QUERYCAP failed");
@@ -173,7 +159,6 @@ bool LVGLCameraDisplay::open_v4l2_device_() {
 bool LVGLCameraDisplay::setup_v4l2_format_() {
   ESP_LOGI(TAG, "Setting V4L2 format: %ux%u RGB565", this->width_, this->height_);
 
-  // D'abord récupérer le format actuel
   struct v4l2_format fmt = {};
   fmt.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
   
@@ -184,7 +169,6 @@ bool LVGLCameraDisplay::setup_v4l2_format_() {
 
   ESP_LOGI(TAG, "Current format: %ux%u", fmt.fmt.pix.width, fmt.fmt.pix.height);
 
-  // Si le format n'est pas déjà RGB565, le configurer
   if (fmt.fmt.pix.pixelformat != V4L2_PIX_FMT_RGB565 ||
       fmt.fmt.pix.width != this->width_ ||
       fmt.fmt.pix.height != this->height_) {
@@ -201,7 +185,6 @@ bool LVGLCameraDisplay::setup_v4l2_format_() {
     }
   }
 
-  // Vérifier le format final
   if (ioctl(this->video_fd_, VIDIOC_G_FMT, &fmt) < 0) {
     ESP_LOGE(TAG, "VIDIOC_G_FMT failed");
     return false;
@@ -217,7 +200,6 @@ bool LVGLCameraDisplay::setup_v4l2_format_() {
 bool LVGLCameraDisplay::setup_v4l2_buffers_() {
   ESP_LOGI(TAG, "Requesting %d V4L2 buffers...", VIDEO_BUFFER_COUNT);
 
-  // Demander les buffers
   struct v4l2_requestbuffers req = {};
   req.count = VIDEO_BUFFER_COUNT;
   req.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
@@ -234,20 +216,17 @@ bool LVGLCameraDisplay::setup_v4l2_buffers_() {
 
   ESP_LOGI(TAG, "Allocated %u buffers", req.count);
 
-  // Mapper et queue les buffers
   for (uint32_t i = 0; i < req.count; i++) {
     struct v4l2_buffer buf = {};
     buf.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
     buf.memory = V4L2_MEMORY_MMAP;
     buf.index = i;
 
-    // Query buffer info
     if (ioctl(this->video_fd_, VIDIOC_QUERYBUF, &buf) < 0) {
       ESP_LOGE(TAG, "VIDIOC_QUERYBUF failed for buffer %u", i);
       return false;
     }
 
-    // Mapper le buffer
     this->mmap_buffers_[i] = (uint8_t*)mmap(
       NULL,
       buf.length,
@@ -265,7 +244,6 @@ bool LVGLCameraDisplay::setup_v4l2_buffers_() {
     ESP_LOGD(TAG, "Buffer %u: mapped at %p, length=%u, offset=%u",
              i, this->mmap_buffers_[i], buf.length, buf.m.offset);
 
-    // Queue le buffer AVANT de démarrer le streaming
     if (ioctl(this->video_fd_, VIDIOC_QBUF, &buf) < 0) {
       ESP_LOGE(TAG, "VIDIOC_QBUF failed for buffer %u: errno=%d", i, errno);
       return false;
@@ -297,21 +275,18 @@ bool LVGLCameraDisplay::capture_v4l2_frame_(uint8_t **frame_data) {
     return false;
   }
 
-  // Dequeue un buffer
   struct v4l2_buffer buf = {};
   buf.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
   buf.memory = V4L2_MEMORY_MMAP;
 
   if (ioctl(this->video_fd_, VIDIOC_DQBUF, &buf) < 0) {
     if (errno == EAGAIN) {
-      // Pas de frame disponible
       return false;
     }
     ESP_LOGE(TAG, "VIDIOC_DQBUF failed: errno=%d", errno);
     return false;
   }
 
-  // Récupérer le pointeur vers les données
   *frame_data = this->mmap_buffers_[buf.index];
   this->current_buffer_index_ = buf.index;
 
@@ -325,7 +300,6 @@ void LVGLCameraDisplay::release_v4l2_frame_() {
     buf.memory = V4L2_MEMORY_MMAP;
     buf.index = this->current_buffer_index_;
 
-    // Re-queue le buffer
     if (ioctl(this->video_fd_, VIDIOC_QBUF, &buf) < 0) {
       ESP_LOGW(TAG, "VIDIOC_QBUF failed");
     }
@@ -341,7 +315,6 @@ void LVGLCameraDisplay::cleanup_v4l2_() {
     this->v4l2_streaming_ = false;
   }
 
-  // Unmap les buffers
   for (int i = 0; i < VIDEO_BUFFER_COUNT; i++) {
     if (this->mmap_buffers_[i] && this->mmap_buffers_[i] != MAP_FAILED) {
       munmap(this->mmap_buffers_[i], this->buffer_length_);
@@ -349,10 +322,15 @@ void LVGLCameraDisplay::cleanup_v4l2_() {
     }
   }
   
-  // Libérer le buffer de travail
   if (this->work_buffer_) {
     heap_caps_free(this->work_buffer_);
     this->work_buffer_ = nullptr;
+  }
+  
+  // ✅ Libérer le buffer aligné
+  if (this->aligned_buffer_) {
+    heap_caps_free(this->aligned_buffer_);
+    this->aligned_buffer_ = nullptr;
   }
 
   if (this->video_fd_ >= 0) {
@@ -362,7 +340,6 @@ void LVGLCameraDisplay::cleanup_v4l2_() {
 
   this->deinit_ppa_();
 }
-
 bool LVGLCameraDisplay::init_ppa_() {
   ESP_LOGI(TAG, "Initializing PPA...");
   
@@ -380,15 +357,12 @@ bool LVGLCameraDisplay::init_ppa_() {
   uint16_t width = this->width_;
   uint16_t height = this->height_;
   
-  // Ajuster dimensions selon rotation
   if (this->rotation_ == ROTATION_90 || this->rotation_ == ROTATION_270) {
     std::swap(width, height);
   }
 
-  // ✅ Ne créer le transform_buffer que si on n'est PAS en mode direct
-  // En mode direct, PPA écrira directement dans le framebuffer LVGL
   if (!this->direct_mode_) {
-    this->transform_buffer_size_ = width * height * 2;  // RGB565
+    this->transform_buffer_size_ = width * height * 2;
     this->transform_buffer_ = (uint8_t*)heap_caps_aligned_alloc(
       64,
       this->transform_buffer_size_,
@@ -405,7 +379,7 @@ bool LVGLCameraDisplay::init_ppa_() {
     ESP_LOGI(TAG, "PPA transform buffer: %ux%u @ %u bytes", 
              width, height, this->transform_buffer_size_);
   } else {
-    ESP_LOGI(TAG, "PPA will write directly to LVGL framebuffer (no intermediate buffer)");
+    ESP_LOGI(TAG, "PPA will write directly to LVGL framebuffer");
   }
   
   return true;
@@ -428,7 +402,6 @@ bool LVGLCameraDisplay::transform_frame_(const uint8_t *src, uint8_t *dst) {
     return false;
   }
 
-  // Configuration PPA
   ppa_srm_oper_config_t srm_config = {};
   
   srm_config.in.buffer = (void*)src;
@@ -446,7 +419,7 @@ bool LVGLCameraDisplay::transform_frame_(const uint8_t *src, uint8_t *dst) {
                    ? this->width_ : this->height_;
   
   srm_config.out.buffer = dst;
-  srm_config.out.buffer_size = out_w * out_h * 2;  // RGB565
+  srm_config.out.buffer_size = out_w * out_h * 2;
   srm_config.out.pic_w = out_w;
   srm_config.out.pic_h = out_h;
   srm_config.out.block_offset_x = 0;
@@ -473,61 +446,79 @@ bool LVGLCameraDisplay::transform_frame_(const uint8_t *src, uint8_t *dst) {
   return true;
 }
 
-// ✅ Initialiser le mode d'affichage direct
+// ✅ Initialiser le mode d'affichage direct avec gestion d'alignement
 bool LVGLCameraDisplay::init_direct_mode_() {
   ESP_LOGI(TAG, "Initializing direct display mode...");
   
-  // Récupérer le display LVGL
   this->lvgl_display_ = lv_disp_get_default();
   if (!this->lvgl_display_) {
     ESP_LOGE(TAG, "No LVGL display found");
     return false;
   }
   
-  // Récupérer le draw buffer (qui contient le framebuffer)
   this->lvgl_draw_buf_ = lv_disp_get_draw_buf(this->lvgl_display_);
   if (!this->lvgl_draw_buf_) {
     ESP_LOGE(TAG, "No LVGL draw buffer found");
     return false;
   }
   
-  // Récupérer le pointeur vers le framebuffer principal
   this->lvgl_framebuffer_ = (uint8_t*)this->lvgl_draw_buf_->buf1;
   if (!this->lvgl_framebuffer_) {
     ESP_LOGE(TAG, "No LVGL framebuffer found");
     return false;
   }
   
-  // Calculer la taille du framebuffer
   uint16_t fb_width = this->width_;
   uint16_t fb_height = this->height_;
   
-  // Ajuster selon rotation
   if (this->rotation_ == ROTATION_90 || this->rotation_ == ROTATION_270) {
     std::swap(fb_width, fb_height);
   }
   
-  this->lvgl_framebuffer_size_ = fb_width * fb_height * 2; // RGB565
+  this->lvgl_framebuffer_size_ = fb_width * fb_height * 2;
   
-  // Vérifier l'alignement du framebuffer pour PPA
+  // ✅ Vérifier l'alignement pour PPA (64 bytes) et cache
   uintptr_t fb_addr = (uintptr_t)this->lvgl_framebuffer_;
-  if (fb_addr % 64 != 0) {
-    ESP_LOGW(TAG, "⚠️  Framebuffer not 64-byte aligned (%p), may impact PPA performance", 
-             this->lvgl_framebuffer_);
+  bool is_aligned = (fb_addr % 64 == 0);
+  bool size_aligned = (this->lvgl_framebuffer_size_ % 64 == 0);
+  
+  if (!is_aligned || !size_aligned) {
+    ESP_LOGW(TAG, "⚠️  Framebuffer alignment issue:");
+    ESP_LOGW(TAG, "   Address: %p (aligned: %s)", 
+             this->lvgl_framebuffer_, is_aligned ? "YES" : "NO");
+    ESP_LOGW(TAG, "   Size: %u bytes (aligned: %s)", 
+             this->lvgl_framebuffer_size_, size_aligned ? "YES" : "NO");
+    
+    // ✅ Créer un buffer intermédiaire aligné
+    this->aligned_buffer_size_ = (this->lvgl_framebuffer_size_ + 63) & ~63;
+    this->aligned_buffer_ = (uint8_t*)heap_caps_aligned_alloc(
+      64,
+      this->aligned_buffer_size_,
+      MALLOC_CAP_SPIRAM | MALLOC_CAP_CACHE_ALIGNED
+    );
+    
+    if (!this->aligned_buffer_) {
+      ESP_LOGE(TAG, "❌ Failed to allocate aligned buffer");
+      return false;
+    }
+    
+    ESP_LOGI(TAG, "✅ Created aligned intermediate buffer (%u bytes)", 
+             this->aligned_buffer_size_);
   }
   
   ESP_LOGI(TAG, "✅ Direct mode ready:");
   ESP_LOGI(TAG, "   Framebuffer: %p (%u bytes)", 
            this->lvgl_framebuffer_, this->lvgl_framebuffer_size_);
   ESP_LOGI(TAG, "   Resolution: %ux%u", fb_width, fb_height);
-  ESP_LOGI(TAG, "   Alignment: %s", (fb_addr % 64 == 0) ? "64-byte (optimal)" : "not optimal");
+  ESP_LOGI(TAG, "   Alignment: %s%s", 
+           is_aligned ? "64-byte (optimal)" : "UNALIGNED", 
+           this->aligned_buffer_ ? " - using intermediate buffer" : "");
   
   return true;
 }
 
-// ✅ Mise à jour en mode direct (PPA → framebuffer LVGL) - OPTIMISÉ
+// ✅ Mise à jour en mode direct avec buffer aligné
 void LVGLCameraDisplay::update_direct_mode_() {
-  // Capturer une frame via V4L2
   uint8_t *frame_data = nullptr;
   if (!this->capture_v4l2_frame_(&frame_data)) {
     this->drop_count_++;
@@ -539,23 +530,43 @@ void LVGLCameraDisplay::update_direct_mode_() {
     return;
   }
 
-  // ✅ OPTIMISATION : Flux direct V4L2 → PPA → framebuffer LVGL
   bool success = false;
+  
+  // ✅ Choisir le buffer de destination (aligné ou direct)
+  uint8_t *dest_buffer = this->aligned_buffer_ ? this->aligned_buffer_ : this->lvgl_framebuffer_;
+  size_t dest_size = this->aligned_buffer_ ? this->aligned_buffer_size_ : this->lvgl_framebuffer_size_;
   
   if (this->use_ppa_ && this->ppa_handle_ && 
       (this->rotation_ != ROTATION_0 || this->mirror_x_ || this->mirror_y_)) {
-    // PPA transforme directement vers le framebuffer LVGL
-    success = this->transform_frame_(frame_data, this->lvgl_framebuffer_);
+    // PPA transforme vers le buffer (aligné ou direct)
+    success = this->transform_frame_(frame_data, dest_buffer);
     
     if (success) {
-      // ✅ Synchroniser le cache pour que LVGL voit les données
-      esp_err_t ret = esp_cache_msync(
-        this->lvgl_framebuffer_, 
-        this->lvgl_framebuffer_size_,
-        ESP_CACHE_MSYNC_FLAG_DIR_M2C | ESP_CACHE_MSYNC_FLAG_UNALIGNED
-      );
+      // ✅ Synchroniser le cache CORRECTEMENT (sans UNALIGNED si aligné)
+      esp_err_t ret;
+      if (this->aligned_buffer_) {
+        // Buffer aligné : pas de flag UNALIGNED
+        ret = esp_cache_msync(
+          dest_buffer, 
+          dest_size,
+          ESP_CACHE_MSYNC_FLAG_DIR_M2C
+        );
+      } else {
+        // Buffer non aligné : utiliser UNALIGNED
+        ret = esp_cache_msync(
+          dest_buffer, 
+          dest_size,
+          ESP_CACHE_MSYNC_FLAG_DIR_M2C | ESP_CACHE_MSYNC_FLAG_UNALIGNED
+        );
+      }
+      
       if (ret != ESP_OK) {
-        ESP_LOGD(TAG, "Cache sync warning: 0x%x", ret);
+        ESP_LOGV(TAG, "Cache sync warning: 0x%x", ret);
+      }
+      
+      // ✅ Si on utilise un buffer intermédiaire, copier vers le framebuffer LVGL
+      if (this->aligned_buffer_) {
+        memcpy(this->lvgl_framebuffer_, this->aligned_buffer_, this->lvgl_framebuffer_size_);
       }
     } else {
       ESP_LOGW(TAG, "PPA transform failed");
@@ -566,32 +577,20 @@ void LVGLCameraDisplay::update_direct_mode_() {
   if (!success) {
     size_t copy_size = std::min(this->buffer_length_, this->lvgl_framebuffer_size_);
     memcpy(this->lvgl_framebuffer_, frame_data, copy_size);
-    
-    // Synchroniser le cache
-    esp_cache_msync(
-      this->lvgl_framebuffer_, 
-      this->lvgl_framebuffer_size_,
-      ESP_CACHE_MSYNC_FLAG_DIR_M2C | ESP_CACHE_MSYNC_FLAG_UNALIGNED
-    );
   }
 
-  // Libérer la frame V4L2 immédiatement
   this->release_v4l2_frame_();
-
-  // ✅ Invalider uniquement la zone nécessaire dans LVGL
   lv_obj_invalidate(lv_scr_act());
   
   this->frame_count_++;
 }
-
-// Mode canvas (ancien mode - pour fallback)
+// Mode canvas (fallback)
 void LVGLCameraDisplay::update_canvas_mode_() {
   if (!this->canvas_obj_) {
     ESP_LOGW(TAG, "No canvas configured");
     return;
   }
 
-  // Capturer une frame via V4L2
   uint8_t *frame_data = nullptr;
   if (!this->capture_v4l2_frame_(&frame_data)) {
     this->drop_count_++;
@@ -602,12 +601,10 @@ void LVGLCameraDisplay::update_canvas_mode_() {
     return;
   }
 
-  // Déterminer le buffer de destination
   uint8_t *display_buffer = frame_data;
   uint16_t canvas_width = this->width_;
   uint16_t canvas_height = this->height_;
   
-  // Appliquer PPA si nécessaire (rotation/mirror)
   if (this->use_ppa_ && this->ppa_handle_ && this->transform_buffer_ &&
       (this->rotation_ != ROTATION_0 || this->mirror_x_ || this->mirror_y_)) {
     
@@ -621,12 +618,10 @@ void LVGLCameraDisplay::update_canvas_mode_() {
     }
   }
 
-  // Afficher sur le canvas LVGL
   lv_canvas_set_buffer(this->canvas_obj_, display_buffer, 
                        canvas_width, canvas_height, LV_IMG_CF_TRUE_COLOR);
   lv_obj_invalidate(this->canvas_obj_);
 
-  // Re-queue le buffer V4L2
   this->release_v4l2_frame_();
 
   this->frame_count_++;
@@ -646,14 +641,12 @@ void LVGLCameraDisplay::loop() {
   }
   this->last_update_time_ = now;
 
-  // ✅ Choisir le mode d'affichage
   if (this->direct_mode_) {
     this->update_direct_mode_();
   } else {
     this->update_canvas_mode_();
   }
 
-  // Log FPS périodique
   if (this->first_update_) {
     this->first_update_ = false;
     this->last_fps_time_ = now;
@@ -686,6 +679,10 @@ void LVGLCameraDisplay::dump_config() {
   if (this->direct_mode_) {
     ESP_LOGCONFIG(TAG, "  Framebuffer: %p (%u bytes)", 
                   this->lvgl_framebuffer_, this->lvgl_framebuffer_size_);
+    if (this->aligned_buffer_) {
+      ESP_LOGCONFIG(TAG, "  Aligned buffer: %p (%u bytes)", 
+                    this->aligned_buffer_, this->aligned_buffer_size_);
+    }
   }
 #endif
 }
