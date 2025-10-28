@@ -1,3 +1,7 @@
+// ============================================
+// CORRECTIONS : Logs réduits dans DQBUF
+// ============================================
+
 #include "mipi_dsi_cam_v4l2_adapter.h"
 #include "esp_video_init.h"
 #include "esp_video_buffer.h"
@@ -381,13 +385,14 @@ esp_err_t MipiDsiCamV4L2Adapter::v4l2_qbuf(void *video, void *buffer) {
     elem->valid_size = 0;
     ctx->queued_count++;
     
+    // ✅ CORRECTION : LOGV au lieu de LOGV
     ESP_LOGV(TAG, "V4L2 qbuf[%u] (queued: %u/%u)", 
              buf->index, ctx->queued_count, ctx->buffer_count);
     
     return ESP_OK;
 }
 
-// ✅ UNE SEULE DÉFINITION DE v4l2_dqbuf
+// ✅ CORRECTION MAJEURE : Logs réduits dans DQBUF
 esp_err_t MipiDsiCamV4L2Adapter::v4l2_dqbuf(void *video, void *buffer) {
     MipiCameraV4L2Context *ctx = (MipiCameraV4L2Context*)video;
     struct v4l2_buffer *buf = (struct v4l2_buffer*)buffer;
@@ -400,12 +405,13 @@ esp_err_t MipiDsiCamV4L2Adapter::v4l2_dqbuf(void *video, void *buffer) {
     }
     
     if (ctx->queued_count == 0) {
-        ESP_LOGV(TAG, "DQBUF: No buffers queued");
+        // ✅ CORRECTION : Supprimer ce log complètement car il arrive trop souvent
         return ESP_ERR_NOT_FOUND;
     }
     
     if (!ctx->camera->acquire_frame(ctx->last_frame_sequence)) {
-        if (ctx->total_dqbuf_calls % 100 == 0) {
+        // ✅ CORRECTION : Log seulement tous les 1000 appels au lieu de 100
+        if (ctx->total_dqbuf_calls % 1000 == 0) {
             ESP_LOGD(TAG, "DQBUF: Waiting for new frame (last_seq=%u, cam_seq=%u, calls=%u)",
                      ctx->last_frame_sequence,
                      ctx->camera->get_frame_sequence(),
@@ -473,9 +479,9 @@ esp_err_t MipiDsiCamV4L2Adapter::v4l2_dqbuf(void *video, void *buffer) {
     ctx->last_frame_sequence = current_sequence;
     ctx->frame_count++;
     
-    if (ctx->frame_count % 30 == 0) {
-        ESP_LOGI(TAG, "✅ DQBUF[%u]: seq=%u, %u bytes (total: %u frames, %u drops, queued: %u/%u)",
-                 elem->index, current_sequence, copy_size,
+    // ✅ CORRECTION : Log seulement toutes les 300 frames (10 secondes à 30fps) au lieu de 30
+    if (ctx->frame_count % 300 == 0) {
+        ESP_LOGI(TAG, "✅ DQBUF stats: %u frames, %u drops, %u/%u queued",
                  ctx->frame_count, ctx->drop_count,
                  ctx->queued_count, ctx->buffer_count);
     }
