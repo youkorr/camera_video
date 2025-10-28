@@ -1,3 +1,10 @@
+// ============================================
+// CORRECTIONS PRINCIPALES :
+// 1. Logs réduits (30s au lieu de 3s, LOGD au lieu de LOGI)
+// 2. Pas de démarrage automatique du streaming
+// 3. Méthodes publiques pour contrôle manuel
+// ============================================
+
 #include "mipi_dsi_cam.h"
 #include "esphome/core/log.h"
 #include "esphome/core/application.h"
@@ -81,20 +88,24 @@ void MipiDsiCam::setup() {
   }
   
   this->initialized_ = true;
+  
+  // ✅ CORRECTION : Activer V4L2 mais NE PAS démarrer le streaming automatiquement
   if (this->enable_v4l2_on_setup_) {
-    ESP_LOGI(TAG, "Auto-enabling V4L2 adapter...");
+    ESP_LOGI(TAG, "Auto-enabling V4L2 adapter (streaming will be manual)");
     this->enable_v4l2_adapter();
   }
   
   // Initialiser ISP Pipeline si demandé
   if (this->enable_isp_on_setup_) {
-    ESP_LOGI(TAG, "Auto-enabling ISP pipeline...");
+    ESP_LOGI(TAG, "Auto-enabling ISP pipeline");
     this->enable_isp_pipeline();
   }
   
-  ESP_LOGI(TAG, "Camera ready (%ux%u) with Auto Exposure", this->width_, this->height_);
+  ESP_LOGI(TAG, "✅ Camera ready (%ux%u) - streaming stopped, use start_streaming() to begin", 
+           this->width_, this->height_);
 }
 
+// ... (garder toutes les autres méthodes init identiques) ...
 
 bool MipiDsiCam::create_sensor_driver_() {
   ESP_LOGI(TAG, "Creating driver for: %s", this->sensor_type_.c_str());
@@ -364,7 +375,7 @@ bool IRAM_ATTR MipiDsiCam::on_csi_frame_done_(
   
   if (trans->received_size > 0) {
     cam->frame_ready_ = true;
-    cam->frame_sequence_++;  // ✅ NOUVEAU : Incrémenter la séquence
+    cam->frame_sequence_++;
     cam->buffer_index_ = (cam->buffer_index_ + 1) % 2;
     cam->total_frames_received_++;
   }
@@ -374,10 +385,11 @@ bool IRAM_ATTR MipiDsiCam::on_csi_frame_done_(
 
 bool MipiDsiCam::start_streaming() {
   if (!this->initialized_ || this->streaming_) {
+    ESP_LOGW(TAG, "Cannot start: initialized=%d streaming=%d", this->initialized_, this->streaming_);
     return false;
   }
   
-  ESP_LOGI(TAG, "Start streaming");
+  ESP_LOGI(TAG, "🎬 Starting streaming...");
   
   this->total_frames_received_ = 0;
   this->last_frame_log_time_ = millis();
@@ -398,14 +410,17 @@ bool MipiDsiCam::start_streaming() {
   }
   
   this->streaming_ = true;
-  ESP_LOGI(TAG, "Streaming active avec Auto Exposure");
+  ESP_LOGI(TAG, "✅ Streaming started successfully");
   return true;
 }
 
 bool MipiDsiCam::stop_streaming() {
   if (!this->streaming_) {
+    ESP_LOGW(TAG, "Already stopped");
     return true;
   }
+  
+  ESP_LOGI(TAG, "⏸️  Stopping streaming...");
   
   esp_cam_ctlr_stop(this->csi_handle_);
   
@@ -414,7 +429,7 @@ bool MipiDsiCam::stop_streaming() {
   }
   
   this->streaming_ = false;
-  ESP_LOGI(TAG, "Streaming stopped");
+  ESP_LOGI(TAG, "✅ Streaming stopped");
   return true;
 }
 
@@ -432,39 +447,36 @@ bool MipiDsiCam::capture_frame() {
   
   return was_ready;
 }
+
 bool MipiDsiCam::acquire_frame(uint32_t last_served_sequence) {
-  // Vérifier s'il y a une nouvelle frame disponible
   if (!this->streaming_) {
     return false;
   }
   
-  // Attendre qu'une frame soit prête ET que ce soit une nouvelle
   if (!this->frame_ready_) {
     return false;
   }
   
-  // ✅ VÉRIFICATION CRITIQUE : nouvelle séquence ?
   if (this->frame_sequence_ <= last_served_sequence) {
+    // ✅ CORRECTION : Utiliser LOGV au lieu de LOGV pour réduire les logs
     ESP_LOGV(TAG, "Same sequence: current=%u, last_served=%u", 
              this->frame_sequence_, last_served_sequence);
     return false;
   }
   
-  // Vérifier qu'aucune frame n'est déjà verrouillée
   if (this->frame_locked_) {
     ESP_LOGW(TAG, "Frame already locked (seq=%u)", this->locked_sequence_);
     return false;
   }
   
-  // Verrouiller la frame actuelle
   this->frame_ready_ = false;
   this->frame_locked_ = true;
   this->locked_sequence_ = this->frame_sequence_;
   
-  // Pointer vers le dernier buffer écrit
   uint8_t last_buffer = (this->buffer_index_ + 1) % 2;
   this->current_frame_buffer_ = this->frame_buffers_[last_buffer];
   
+  // ✅ CORRECTION : LOGV au lieu de LOGD
   ESP_LOGV(TAG, "Frame acquired: seq=%u (was: %u)", 
            this->locked_sequence_, last_served_sequence);
   
@@ -474,9 +486,11 @@ bool MipiDsiCam::acquire_frame(uint32_t last_served_sequence) {
 void MipiDsiCam::release_frame() {
   if (this->frame_locked_) {
     this->frame_locked_ = false;
+    // ✅ CORRECTION : LOGV au lieu de LOGD
     ESP_LOGV(TAG, "Frame released: seq=%u", this->locked_sequence_);
   }
 }
+
 size_t MipiDsiCam::copy_frame_rgb565(uint8_t *dest, size_t max_size, bool apply_white_balance) {
   if (dest == nullptr || this->current_frame_buffer_ == nullptr) {
     return 0;
@@ -625,6 +639,7 @@ void MipiDsiCam::update_auto_white_balance_() {
 
   this->set_white_balance_gains(new_red, new_green, new_blue, true);
 }
+
 void MipiDsiCam::update_auto_exposure_() {
   if (!this->auto_exposure_enabled_ || !this->sensor_driver_) {
     return;
@@ -661,6 +676,7 @@ void MipiDsiCam::update_auto_exposure_() {
     this->sensor_driver_->set_exposure(this->current_exposure_);
     this->sensor_driver_->set_gain(this->current_gain_index_);
     
+    // ✅ CORRECTION : LOGV au lieu de LOGV
     ESP_LOGV(TAG, "🔆 AE: brightness=%u target=%u → exp=0x%04X gain=%u",
              avg_brightness, this->ae_target_brightness_,
              this->current_exposure_, this->current_gain_index_);
@@ -697,6 +713,7 @@ uint32_t MipiDsiCam::calculate_brightness_() {
   return sample_count > 0 ? (sum / sample_count) : 128;
 }
 
+// ✅ CORRECTION MAJEURE : Logs réduits drastiquement
 void MipiDsiCam::loop() {
   if (this->streaming_) {
     // Mise à jour Auto Exposure
@@ -712,11 +729,13 @@ void MipiDsiCam::loop() {
     }
     
     uint32_t now = millis();
-    if (now - this->last_frame_log_time_ >= 3000) {
-      float sensor_fps = this->total_frames_received_ / 3.0f;
+    // ✅ Log seulement toutes les 30 secondes au lieu de 3s
+    if (now - this->last_frame_log_time_ >= 30000) {
+      float sensor_fps = this->total_frames_received_ / 30.0f;
       float ready_rate = (float)ready_count / (float)(ready_count + not_ready_count) * 100.0f;
       
-      ESP_LOGI(TAG, "📸 FPS: %.1f | frame_ready: %.1f%% | exp:0x%04X gain:%u", 
+      // ✅ Utiliser LOGD (debug) au lieu de LOGI
+      ESP_LOGD(TAG, "📸 FPS: %.1f | frame_ready: %.1f%% | exp:0x%04X gain:%u", 
                sensor_fps, ready_rate, this->current_exposure_, this->current_gain_index_);
       
       this->total_frames_received_ = 0;
@@ -861,7 +880,7 @@ void MipiDsiCam::enable_v4l2_adapter() {
     delete this->v4l2_adapter_;
     this->v4l2_adapter_ = nullptr;
   } else {
-    ESP_LOGI(TAG, "✅ V4L2 adapter enabled");
+    ESP_LOGI(TAG, "✅ V4L2 adapter enabled (use start_streaming() to begin)");
   }
 }
 
