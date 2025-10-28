@@ -327,7 +327,6 @@ void LVGLCameraDisplay::cleanup_v4l2_() {
     this->work_buffer_ = nullptr;
   }
   
-  // ✅ Libérer le buffer aligné
   if (this->aligned_buffer_) {
     heap_caps_free(this->aligned_buffer_);
     this->aligned_buffer_ = nullptr;
@@ -340,6 +339,7 @@ void LVGLCameraDisplay::cleanup_v4l2_() {
 
   this->deinit_ppa_();
 }
+
 bool LVGLCameraDisplay::init_ppa_() {
   ESP_LOGI(TAG, "Initializing PPA...");
   
@@ -446,7 +446,6 @@ bool LVGLCameraDisplay::transform_frame_(const uint8_t *src, uint8_t *dst) {
   return true;
 }
 
-// ✅ Initialiser le mode d'affichage direct avec gestion d'alignement
 bool LVGLCameraDisplay::init_direct_mode_() {
   ESP_LOGI(TAG, "Initializing direct display mode...");
   
@@ -477,7 +476,6 @@ bool LVGLCameraDisplay::init_direct_mode_() {
   
   this->lvgl_framebuffer_size_ = fb_width * fb_height * 2;
   
-  // ✅ Vérifier l'alignement pour PPA (64 bytes) et cache
   uintptr_t fb_addr = (uintptr_t)this->lvgl_framebuffer_;
   bool is_aligned = (fb_addr % 64 == 0);
   bool size_aligned = (this->lvgl_framebuffer_size_ % 64 == 0);
@@ -489,7 +487,6 @@ bool LVGLCameraDisplay::init_direct_mode_() {
     ESP_LOGW(TAG, "   Size: %u bytes (aligned: %s)", 
              this->lvgl_framebuffer_size_, size_aligned ? "YES" : "NO");
     
-    // ✅ Créer un buffer intermédiaire aligné
     this->aligned_buffer_size_ = (this->lvgl_framebuffer_size_ + 63) & ~63;
     this->aligned_buffer_ = (uint8_t*)heap_caps_aligned_alloc(
       64,
@@ -517,7 +514,6 @@ bool LVGLCameraDisplay::init_direct_mode_() {
   return true;
 }
 
-// ✅ Mise à jour en mode direct avec buffer aligné
 void LVGLCameraDisplay::update_direct_mode_() {
   uint8_t *frame_data = nullptr;
   if (!this->capture_v4l2_frame_(&frame_data)) {
@@ -532,27 +528,23 @@ void LVGLCameraDisplay::update_direct_mode_() {
 
   bool success = false;
   
-  // ✅ Choisir le buffer de destination (aligné ou direct)
   uint8_t *dest_buffer = this->aligned_buffer_ ? this->aligned_buffer_ : this->lvgl_framebuffer_;
   size_t dest_size = this->aligned_buffer_ ? this->aligned_buffer_size_ : this->lvgl_framebuffer_size_;
   
   if (this->use_ppa_ && this->ppa_handle_ && 
       (this->rotation_ != ROTATION_0 || this->mirror_x_ || this->mirror_y_)) {
-    // PPA transforme vers le buffer (aligné ou direct)
+    
     success = this->transform_frame_(frame_data, dest_buffer);
     
     if (success) {
-      // ✅ Synchroniser le cache CORRECTEMENT (sans UNALIGNED si aligné)
       esp_err_t ret;
       if (this->aligned_buffer_) {
-        // Buffer aligné : pas de flag UNALIGNED
         ret = esp_cache_msync(
           dest_buffer, 
           dest_size,
           ESP_CACHE_MSYNC_FLAG_DIR_M2C
         );
       } else {
-        // Buffer non aligné : utiliser UNALIGNED
         ret = esp_cache_msync(
           dest_buffer, 
           dest_size,
@@ -564,7 +556,6 @@ void LVGLCameraDisplay::update_direct_mode_() {
         ESP_LOGV(TAG, "Cache sync warning: 0x%x", ret);
       }
       
-      // ✅ Si on utilise un buffer intermédiaire, copier vers le framebuffer LVGL
       if (this->aligned_buffer_) {
         memcpy(this->lvgl_framebuffer_, this->aligned_buffer_, this->lvgl_framebuffer_size_);
       }
@@ -573,7 +564,6 @@ void LVGLCameraDisplay::update_direct_mode_() {
     }
   }
   
-  // Si PPA a échoué ou n'est pas utilisé, copie directe
   if (!success) {
     size_t copy_size = std::min(this->buffer_length_, this->lvgl_framebuffer_size_);
     memcpy(this->lvgl_framebuffer_, frame_data, copy_size);
@@ -584,7 +574,8 @@ void LVGLCameraDisplay::update_direct_mode_() {
   
   this->frame_count_++;
 }
-// Mode canvas (fallback)
+
+// ✅ CORRECTION POUR LVGL 8.4.0
 void LVGLCameraDisplay::update_canvas_mode_() {
   if (!this->canvas_obj_) {
     ESP_LOGW(TAG, "No canvas configured");
@@ -598,6 +589,7 @@ void LVGLCameraDisplay::update_canvas_mode_() {
   }
 
   if (!frame_data) {
+    this->release_v4l2_frame_();
     return;
   }
 
@@ -618,8 +610,15 @@ void LVGLCameraDisplay::update_canvas_mode_() {
     }
   }
 
-  lv_canvas_set_buffer(this->canvas_obj_, display_buffer, 
-                       canvas_width, canvas_height, LV_IMG_CF_TRUE_COLOR);
+  // ✅ API LVGL 8.4.0 correcte
+  lv_canvas_set_buffer(
+    this->canvas_obj_, 
+    display_buffer, 
+    canvas_width, 
+    canvas_height, 
+    LV_IMG_CF_TRUE_COLOR
+  );
+  
   lv_obj_invalidate(this->canvas_obj_);
 
   this->release_v4l2_frame_();
