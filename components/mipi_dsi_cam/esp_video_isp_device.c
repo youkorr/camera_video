@@ -18,10 +18,10 @@
 #include "freertos/task.h"
 #include "freertos/queue.h"
 
-#include "esp_video.h"
+//#include "esp_video.h"
 #include "mipi_dsi_cam.h"
 #include "mipi_dsi_cam_v4l2_adapter.h"
-//#include "esp_video_device.h"
+#include "esp_video_device.h"
 //#include "esp_video_isp_ioctl.h"
 //#include "esp_video_device_internal.h"
 
