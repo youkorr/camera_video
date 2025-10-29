@@ -3,7 +3,7 @@ import esphome.config_validation as cv
 from esphome.const import CONF_ID
 
 CODEOWNERS = ["@youkorr"]
-DEPENDENCIES = ["tab5_camera"] #["mipi_dsi_cam"]
+DEPENDENCIES = ["mipi_dsi_cam"] #["mipi_dsi_cam"]
 
 jpeg_ns = cg.esphome_ns.namespace("jpeg")
 JPEGEncoder = jpeg_ns.class_("JPEGEncoder", cg.Component)
