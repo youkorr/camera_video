@@ -3,7 +3,7 @@ import esphome.config_validation as cv
 from esphome.const import CONF_ID
 
 CODEOWNERS = ["@youkorr"]
-DEPENDENCIES = ["mipi_dsi_cam"]
+DEPENDENCIES = ["tab5_camera"]  #["mipi_dsi_cam"]
 
 h264_ns = cg.esphome_ns.namespace("h264")
 H264Encoder = h264_ns.class_("H264Encoder", cg.Component)
