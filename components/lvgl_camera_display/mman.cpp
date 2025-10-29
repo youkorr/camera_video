@@ -8,8 +8,26 @@
 #include "esp_log.h"
 #include "esp_cache.h"
 #include "../mipi_dsi_cam/mipi_dsi_cam_v4l2_adapter.h"
+
+#if __has_include("../linux/v4l2-common.h")
 #include "../linux/v4l2-common.h"
+#elif __has_include("linux/v4l2-common.h")
+#include "linux/v4l2-common.h"
+#elif __has_include("v4l2-common.h")
+#include "v4l2-common.h"
+#else
+#error "Unable to locate v4l2-common.h"
+#endif
+
+#if __has_include("../linux/v4l2-controls.h")
 #include "../linux/v4l2-controls.h"
+#elif __has_include("linux/v4l2-controls.h")
+#include "linux/v4l2-controls.h"
+#elif __has_include("v4l2-controls.h")
+#include "v4l2-controls.h"
+#else
+#error "Unable to locate v4l2-controls.h"
+#endif
 
 namespace esphome {
 namespace mipi_dsi_cam {
