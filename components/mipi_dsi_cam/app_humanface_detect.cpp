@@ -7,7 +7,7 @@
 #include "esp_log.h"
 #include "iostream"
 #include "human_face_detect.hpp"
-#include "dl_tool.hpp"
+//#include "dl_tool.hpp"
 #include "app_humanface_detect.h"
 
 static HumanFaceDetect *detect = NULL;
