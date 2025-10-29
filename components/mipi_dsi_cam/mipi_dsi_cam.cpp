@@ -104,6 +104,24 @@ void MipiDsiCam::setup() {
   ESP_LOGI(TAG, "✅ Camera ready (%ux%u) - streaming stopped, use start_streaming() to begin", 
            this->width_, this->height_);
 }
+  if (this->enable_jpeg_on_setup_) {
+    ESP_LOGI(TAG, "Creating JPEG encoder...");
+    esp_err_t ret = mipi_dsi_cam_create_jpeg_device(this);
+    if (ret == ESP_OK) {
+      ESP_LOGI(TAG, "✅ JPEG encoder available at /dev/video10");
+    }
+  }
+  
+  if (this->enable_h264_on_setup_) {
+    ESP_LOGI(TAG, "Creating H.264 encoder...");
+    esp_err_t ret = mipi_dsi_cam_create_h264_device(false);
+    if (ret == ESP_OK) {
+      ESP_LOGI(TAG, "✅ H.264 encoder available at /dev/video11");
+    }
+  }
+  
+  ESP_LOGI(TAG, "✅ Camera ready...");
+}
 
 // ... (garder toutes les autres méthodes init identiques) ...
 
