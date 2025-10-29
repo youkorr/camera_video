@@ -7,7 +7,10 @@
 #include <stdio.h>
 #include <string.h>
 #include <sys/lock.h>
-#include "videodev2.h"
+#include "../linux/v4l2-common.h"
+#include "../linux/v4l2-controls.h"
+#include "../linux/videodev2.h"
+//#include "videodev2.h"
 #include "esp_log.h"
 #include "esp_heap_caps.h"
 #include "esp_video_buffer.h"
