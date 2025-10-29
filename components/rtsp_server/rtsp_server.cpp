@@ -1,5 +1,7 @@
 #include "rtsp_server.h"
 #include "esphome/core/log.h"
+#include "esphome/core/hal.h"
+#include <cerrno>
 #include <cstring>
 
 namespace esphome {
@@ -25,71 +27,7 @@ void RTSPServer::setup() {
   ESP_LOGI(TAG, "✅ RTSP server ready at rtsp://<IP>:%u%s", 
            this->port_, this->path_.c_str());
 }
-
-bool RTSPServer::start_server_() {
-  this->server_socket_ = socket(AF_INET, SOCK_STREAM, 0);
-  if (this->server_socket_ < 0) {
-    return false;
-  }
-  
-  int opt = 1;
-  setsockopt(this->server_socket_, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
-  
-  struct sockaddr_in addr = {};
-  addr.sin_family = AF_INET;
-  addr.sin_port = htons(this->port_);
-  addr.sin_addr.s_addr = INADDR_ANY;
-  
-  if (bind(this->server_socket_, (struct sockaddr*)&addr, sizeof(addr)) < 0) {
-    close(this->server_socket_);
-    return false;
-  }
-  
-  if (listen(this->server_socket_, 2) < 0) {
-    close(this->server_socket_);
-    return false;
-  }
-  
-  // Mode non-bloquant
-  fcntl(this->server_socket_, F_SETFL, O_NONBLOCK);
-  
-  return true;
-}
-
-void RTSPServer::loop() {
-  if (this->server_socket_ < 0) return;
-  
-  struct sockaddr_in client_addr;
-  socklen_t addr_len = sizeof(client_addr);
-  
-  int client_sock = accept(this->server_socket_, 
-                            (struct sockaddr*)&client_addr, &addr_len);
-  
-  if (client_sock >= 0) {
-    ESP_LOGI(TAG, "📥 Client connected");
-    this->handle_client_(client_sock);
-    close(client_sock);
-  }
-}
-
-void RTSPServer::handle_client_(int sock) {
-  char buffer[1024];
-  int n = recv(sock, buffer, sizeof(buffer) - 1, 0);
-  
-  if (n <= 0) return;
-  buffer[n] = '\0';
-  
-  // Parser la requête RTSP basique
-  if (strstr(buffer, "DESCRIBE")) {
-    const char *sdp = 
-      "v=0\r\n"
-      "s=ESPHome Camera Stream\r\n"
-      "m=video 0 RTP/AVP 96\r\n"
-      "a=rtpmap:96 H264/90000\r\n"
-      "a=control:track1\r\n";
-    
-    this->send_rtsp_response_(sock, "200 OK", sdp);
-    
+@@ -93,57 +95,97 @@ void RTSPServer::handle_client_(int sock) {
   } else if (strstr(buffer, "SETUP")) {
     const char *transport = "RTP/AVP;unicast;client_port=5000-5001\r\n";
     this->send_rtsp_response_(sock, "200 OK", transport);
@@ -116,6 +54,23 @@ void RTSPServer::send_rtsp_response_(int sock, const char *status,
 void RTSPServer::stream_h264_(int sock) {
   ESP_LOGI(TAG, "🎥 Starting H.264 stream");
   
+
+  if (this->encoder_ == nullptr || !this->encoder_->is_initialized()) {
+    ESP_LOGE(TAG, "Encoder not ready, aborting stream");
+    return;
+  }
+
+  auto *camera = this->encoder_->get_camera();
+  if (camera == nullptr) {
+    ESP_LOGE(TAG, "No camera attached to encoder");
+    return;
+  }
+
+  if (!camera->is_streaming() && !camera->start_streaming()) {
+    ESP_LOGE(TAG, "Unable to start camera stream");
+    return;
+  }
+
   uint8_t *h264_data = nullptr;
   size_t h264_size = 0;
   bool is_keyframe = false;
@@ -137,11 +92,56 @@ void RTSPServer::stream_h264_(int sock) {
       
       ESP_LOGD(TAG, "📤 Sent %s frame (%u bytes)", 
                is_keyframe ? "I" : "P", (unsigned)h264_size);
+  uint32_t last_sequence = camera->get_current_sequence();
+
+  while (true) {
+    if (!camera->acquire_frame(last_sequence)) {
+      esphome::delay(5);
+      continue;
     }
     
     delay(33);  // ~30 FPS
+
+    uint8_t *camera_data = camera->get_image_data();
+    size_t camera_size = camera->get_image_size();
+    uint32_t current_sequence = camera->get_current_sequence();
+
+    if (camera_data == nullptr || camera_size == 0) {
+      ESP_LOGW(TAG, "Camera returned empty frame");
+      camera->release_frame();
+      esphome::delay(5);
+      continue;
+    }
+
+    esp_err_t ret = this->encoder_->encode_frame(camera_data, camera_size,
+                                                 &h264_data, &h264_size, &is_keyframe);
+    camera->release_frame();
+
+    if (ret != ESP_OK || h264_size == 0) {
+      ESP_LOGW(TAG, "Failed to encode frame: err=0x%x size=%u", ret, (unsigned)h264_size);
+      esphome::delay(5);
+      continue;
+    }
+
+    ssize_t sent = send(sock, h264_data, h264_size, 0);
+    this->encoder_->release_output_buffer(h264_data);
+
+    if (sent < 0) {
+      ESP_LOGE(TAG, "Socket send failed: errno=%d", errno);
+      break;
+    }
+
+    if (static_cast<size_t>(sent) != h264_size) {
+      ESP_LOGW(TAG, "Partial frame sent: %d/%u bytes", (int)sent, (unsigned)h264_size);
+    }
+
+    ESP_LOGD(TAG, "📤 Sent %s frame (%u bytes)", is_keyframe ? "I" : "P", (unsigned)h264_size);
+
+    last_sequence = current_sequence;
+    esphome::delay(33);
   }
   
+
   ESP_LOGI(TAG, "✅ Stream finished");
 }
 
