@@ -8,14 +8,18 @@
 #include "freertos/semphr.h"
 #include <string.h>
 #include <fcntl.h>
-#include "../lvgl_camera_display/ioctl.h"
+//#include "../lvgl_camera_display/ioctl.h"
+#include "../linux/ioctl.h"
 #include "../lvgl_camera_display/mman.h"
 //#include <sys/mman.h>
 #include <sys/param.h>
 #include <sys/errno.h>
 #include "esp_err.h"
 #include "esp_log.h"
-#include "videodev2.h"
+#include "../linux/v4l2-common.h"
+#include "../linux/v4l2-controls.h"
+#include "../linux/videodev2.h"
+//#include "videodev2.h"
 #include "esp_video_init.h"
 #include "app_video.h"
 
