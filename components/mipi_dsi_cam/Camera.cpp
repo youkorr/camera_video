@@ -27,7 +27,7 @@
 #include "app_video.h"
 #include "app_pedestrian_detect.h"
 #include "app_humanface_detect.h"
-#include "app_camera_pipeline.hpp"
+//#include "app_camera_pipeline.hpp"
 #include "Camera.hpp"
 //#include "ui/ui.h"
 
