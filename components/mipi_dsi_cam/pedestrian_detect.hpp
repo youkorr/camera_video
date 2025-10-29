@@ -1,7 +1,7 @@
 #pragma once
 
-#include "dl_detect_base.hpp"
-#include "dl_detect_pico_postprocessor.hpp"
+//#include "dl_detect_base.hpp"
+//#include "dl_detect_pico_postprocessor.hpp"
 
 namespace pedestrian_detect {
 class Pico : public dl::detect::DetectImpl {
