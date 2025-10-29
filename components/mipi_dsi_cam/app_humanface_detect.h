@@ -5,7 +5,7 @@
  */
 #pragma once
 
-#include "human_face_detect.hpp"
+//#include "human_face_detect.hpp"
 
 std::list<dl::detect::result_t> app_humanface_detect(uint16_t *frame, int width, int height);
 
