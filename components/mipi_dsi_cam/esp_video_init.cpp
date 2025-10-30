@@ -9,9 +9,7 @@
 
 #ifdef USE_ESP32_VARIANT_ESP32P4
 
-extern "C" {
-  #include "../linux/ioctl.h"
-}
+
 
 static const char *TAG = "esp_video_init";
 
