@@ -8,27 +8,18 @@
 #include "freertos/semphr.h"
 #include <string.h>
 #include <fcntl.h>
+#include "../lvgl_camera_display/ioctl.h"
 //#include "../linux/ioctl.h"
-//#include <sys/mman.h>
+#include <sys/mman.h>
 #include <sys/param.h>
 #include <sys/errno.h>
 #include "esp_err.h"
 #include "esp_log.h"
-//#include "videodev2.h"
+#include "videodev2.h"
 #include "esp_video_init.h"
 #include "app_video.h"
 
 
-#ifdef USE_ESP32_VARIANT_ESP32P4
-
-extern "C" {
-  #include "../linux/ioctl.h"
-  #include "../lvgl_camera_display/mman.h"
-  #include "../linux/v4l2-common.h"
-  #include "../linux/v4l2-controls.h"
-  #include "../linux/videodev2.h""
-  #include "../sys/mman.h"
-}
 
 static const char *TAG = "app_video";
 
