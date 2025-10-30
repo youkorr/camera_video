@@ -98,7 +98,7 @@ public:
   bool has_external_clock() const { return this->external_clock_pin_ >= 0; }
   
   // Getters pour les adaptateurs
- // MipiDsiCamV4L2Adapter* get_v4l2_adapter() const { return this->v4l2_adapter_; }
+  MipiDsiCamV4L2Adapter* get_v4l2_adapter() const { return this->v4l2_adapter_; }
   MipiDsiCamISPPipeline* get_isp_pipeline() const { return this->isp_pipeline_; }
   
   // Gestion de la séquence de frames
@@ -206,8 +206,8 @@ protected:
   bool enable_isp_on_setup_{false};
 
   // ✅ Nouveaux drapeaux encodeurs
-  //bool enable_jpeg_on_setup_{false};
-  //bool enable_h264_on_setup_{false};
+  bool enable_jpeg_on_setup_{false};
+  bool enable_h264_on_setup_{false};
   
   // Méthodes d'initialisation
   bool create_sensor_driver_();
