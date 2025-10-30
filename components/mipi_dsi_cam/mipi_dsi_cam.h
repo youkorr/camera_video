@@ -20,7 +20,7 @@ namespace esphome {
 namespace mipi_dsi_cam {
 
 // Forward declarations
-class MipiDsiCamV4L2Adapter;
+//class MipiDsiCamV4L2Adapter;
 class MipiDsiCamISPPipeline;
 
 // Interface pour les drivers de capteurs
@@ -98,7 +98,7 @@ public:
   bool has_external_clock() const { return this->external_clock_pin_ >= 0; }
   
   // Getters pour les adaptateurs
-  MipiDsiCamV4L2Adapter* get_v4l2_adapter() const { return this->v4l2_adapter_; }
+ // MipiDsiCamV4L2Adapter* get_v4l2_adapter() const { return this->v4l2_adapter_; }
   MipiDsiCamISPPipeline* get_isp_pipeline() const { return this->isp_pipeline_; }
   
   // Gestion de la séquence de frames
@@ -134,7 +134,7 @@ public:
   void set_white_balance_gains(float red, float green, float blue, bool update_fixed = true);
   
   // Activer les adaptateurs
-  void enable_v4l2_adapter();
+  //void enable_v4l2_adapter();
   void enable_isp_pipeline();
   
 protected:
@@ -200,14 +200,14 @@ protected:
   uint32_t last_awb_update_{0};
   
   // Adaptateurs optionnels
-  MipiDsiCamV4L2Adapter *v4l2_adapter_{nullptr};
+  //MipiDsiCamV4L2Adapter *v4l2_adapter_{nullptr};
   MipiDsiCamISPPipeline *isp_pipeline_{nullptr};
   bool enable_v4l2_on_setup_{false};
   bool enable_isp_on_setup_{false};
 
   // ✅ Nouveaux drapeaux encodeurs
-  bool enable_jpeg_on_setup_{false};
-  bool enable_h264_on_setup_{false};
+  //bool enable_jpeg_on_setup_{false};
+  //bool enable_h264_on_setup_{false};
   
   // Méthodes d'initialisation
   bool create_sensor_driver_();
