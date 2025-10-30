@@ -10,8 +10,8 @@
 #include <stdbool.h>
 #include "sdkconfig.h"
 #include "driver/isp.h"
-//#include "v4l2-controls.h"
-#include "mipi_dsi_cam_v4l2_adapter.h"
+#include "v4l2-controls.h"
+//#include "mipi_dsi_cam_v4l2_adapter.h"
 
 #ifdef __cplusplus
 extern "C" {
