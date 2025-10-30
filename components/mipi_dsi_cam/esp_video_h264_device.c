@@ -15,7 +15,9 @@
 //#include "esp_h264_enc_single_sw.h"
 //#include "esp_h264_enc_single.h"
 
-#include "esp_video.h"
+//#include "esp_video.h"
+#include "app_video.h"
+
 #include "esp_video_device_internal.h"
 
 #define H264_NAME "H.264"
