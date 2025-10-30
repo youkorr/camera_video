@@ -1,20 +1,12 @@
 #include "mipi_dsi_cam_video_devices.h"
 #include "esp_video_init.h"
 #include "esp_video_device.h"
-//#include "videodev2.h"
+#include "videodev2.h"
 
 #include "esphome/core/log.h"
 #include <cstring>  // ✅ AJOUT : pour memset et strncpy
 
-#ifdef USE_ESP32_VARIANT_ESP32P4
 
-extern "C" {
-  
-  #include "../linux/v4l2-common.h"
-  #include "../linux/v4l2-controls.h"
-  #include "../linux/videodev2.h""
-  
-}
 
 static const char *TAG = "video_devices";
 
