@@ -9,8 +9,9 @@
 #include <string.h>
 #include <fcntl.h>
 #include "../lvgl_camera_display/ioctl.h"
+#include "../lvgl_camera_display/mman.h"
 //#include "../linux/ioctl.h"
-#include <sys/mman.h>
+//#include <sys/mman.h>
 #include <sys/param.h>
 #include <sys/errno.h>
 #include "esp_err.h"
