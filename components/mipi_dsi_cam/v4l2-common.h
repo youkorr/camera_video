@@ -63,7 +63,7 @@
  */
 
 /* Current cropping area */
-#define V4L2_SEL_TGT_CROP 0x0000
+//#define V4L2_SEL_TGT_CROP 0x0000
 /* Default cropping area */
 #define V4L2_SEL_TGT_CROP_DEFAULT 0x0001
 /* Cropping bounds */
