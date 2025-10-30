@@ -3,9 +3,13 @@
 #include "esp_vfs.h"
 #include <fcntl.h>
 //#include "../lvgl_camera_display/ioctl.h"
-#include "../linux/ioctl.h"
+
 #include <errno.h>
 #include <cstring>
+
+extern "C" {
+  #include "../linux/ioctl.h"
+}
 
 static const char *TAG = "esp_video_init";
 
