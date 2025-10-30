@@ -7,7 +7,7 @@
 #include <errno.h>
 #include <cstring>
 
-#ifdef USE_ESP32_VARIANT_ESP32P4
+
 
 
 
