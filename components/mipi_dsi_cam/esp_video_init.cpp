@@ -7,6 +7,8 @@
 #include <errno.h>
 #include <cstring>
 
+#ifdef USE_ESP32_VARIANT_ESP32P4
+
 extern "C" {
   #include "../linux/ioctl.h"
 }
