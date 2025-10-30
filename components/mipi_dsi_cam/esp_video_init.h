@@ -10,7 +10,7 @@
 #include <stdbool.h>
 #include "esp_err.h"
 #include "driver/i2c_master.h"
-#include "esp_cam_ctlr_dvp.h"
+//#include "esp_cam_ctlr_dvp.h"
 #include "driver/jpeg_encode.h"
 
 #ifdef __cplusplus
