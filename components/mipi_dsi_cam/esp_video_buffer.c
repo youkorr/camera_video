@@ -12,7 +12,7 @@
 #include "esp_heap_caps.h"
 #include "esp_video_buffer.h"
 
-#ifdef USE_ESP32_VARIANT_ESP32P4
+
 
 
 
