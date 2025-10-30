@@ -11,9 +11,9 @@
 
 
 #include "../lvgl_camera_display/ioctl.h"
-#include "types.h"
-#include "v4l2-common.h"
-#include "v4l2-controls.h"
+//#include "types.h"
+//#include "v4l2-common.h"
+//#include "v4l2-controls.h"
 
 #ifdef __cplusplus
 extern "C" {
