@@ -73,7 +73,7 @@
 /* Current composing area */
 //#define V4L2_SEL_TGT_COMPOSE 0x0100
 /* Default composing area */
-#define V4L2_SEL_TGT_COMPOSE_DEFAULT 0x0101
+//#define V4L2_SEL_TGT_COMPOSE_DEFAULT 0x0101
 /* Composing bounds */
 #define V4L2_SEL_TGT_COMPOSE_BOUNDS 0x0102
 /* Current composing area plus all padding pixels */
