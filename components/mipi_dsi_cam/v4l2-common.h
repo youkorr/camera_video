@@ -65,9 +65,9 @@
 /* Current cropping area */
 //#define V4L2_SEL_TGT_CROP 0x0000
 /* Default cropping area */
-#define V4L2_SEL_TGT_CROP_DEFAULT 0x0001
+//#define V4L2_SEL_TGT_CROP_DEFAULT 0x0001
 /* Cropping bounds */
-#define V4L2_SEL_TGT_CROP_BOUNDS 0x0002
+//#define V4L2_SEL_TGT_CROP_BOUNDS 0x0002
 /* Native frame size */
 #define V4L2_SEL_TGT_NATIVE_SIZE 0x0003
 /* Current composing area */
