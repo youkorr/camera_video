@@ -9,123 +9,97 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include "esp_err.h"
-
-#ifdef __has_include
-  #if __has_include("driver/i2c_master.h")
-    #include "driver/i2c_master.h"
-  #else
-    typedef void *i2c_master_bus_handle_t;
-  #endif
-
-  #if __has_include("esp_cam_ctlr_dvp.h")
-    #include "esp_cam_ctlr_dvp.h"
-  #else
-    typedef struct {
-        int pclk_io;
-        int vsync_io;
-        int href_io;
-        int data_io[8];
-        int xclk_io;
-    } esp_cam_ctlr_dvp_pin_config_t;
-  #endif
-
-  #if __has_include("driver/jpeg_encode.h")
-    #include "driver/jpeg_encode.h"
-  #else
-    typedef void *jpeg_encoder_handle_t;
-  #endif
-#endif
+#include "driver/i2c_master.h"
+#include "esp_cam_ctlr_dvp.h"
+#include "driver/jpeg_encode.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-/** SCCB initialization configuration **/
+/**
+ * @brief SCCB initialization configuration
+ */
 typedef struct esp_video_init_sccb_config {
-    bool init_sccb;
+    bool init_sccb; /*!< true:  SCCB I2C is not initialized and esp_video_init function will initialize SCCB I2C with
+                       given parameters i2c_config. false: SCCB I2C is initialized and esp_video_init function can use
+                       i2c_handle directly */
     union {
         struct {
-            uint8_t port;
-            uint8_t scl_pin;
-            uint8_t sda_pin;
+            uint8_t port;    /*!< SCCB I2C port */
+            uint8_t scl_pin; /*!< SCCB I2C SCL pin */
+            uint8_t sda_pin; /*!< SCCB I2C SDA pin */
         } i2c_config;
-        i2c_master_bus_handle_t i2c_handle;
+
+        i2c_master_bus_handle_t i2c_handle; /*!< SCCB I2C handle */
     };
-    uint32_t freq;
+
+    uint32_t freq; /*!< SCCB I2C frequency */
 } esp_video_init_sccb_config_t;
 
-/** MIPI CSI configuration **/
+/**
+ * @brief MIPI CSI initialization and camera sensor connection configuration
+ */
 typedef struct esp_video_init_csi_config {
-    esp_video_init_sccb_config_t sccb_config;
-    int8_t reset_pin;
-    int8_t pwdn_pin;
+    esp_video_init_sccb_config_t sccb_config; /*!< Camera sensor SCCB configuration */
+
+    int8_t reset_pin; /*!< Camera sensor reset pin, if hardware has no reset pin, set reset_pin to be -1 */
+    int8_t pwdn_pin;  /*!< Camera sensor power down pin, if hardware has no power down pin, set pwdn_pin to be -1 */
 } esp_video_init_csi_config_t;
 
-/** DVP configuration **/
+/**
+ * @brief DVP initialization and camera sensor connection configuration
+ */
 typedef struct esp_video_init_dvp_config {
-    esp_video_init_sccb_config_t sccb_config;
-    int8_t reset_pin;
-    int8_t pwdn_pin;
-    esp_cam_ctlr_dvp_pin_config_t dvp_pin;
-    uint32_t xclk_freq;
+    esp_video_init_sccb_config_t sccb_config; /*!< Camera sensor SCCB configuration */
+
+    int8_t reset_pin; /*!< Camera sensor reset pin, if hardware has no reset pin, set reset_pin to be -1 */
+    int8_t pwdn_pin;  /*!< Camera sensor power down pin, if hardware has no power down pin, set pwdn_pin to be -1 */
+
+    esp_cam_ctlr_dvp_pin_config_t dvp_pin; /*!< DVP pin configuration */
+
+    uint32_t xclk_freq; /*!< DVP hardware output clock frequency */
 } esp_video_init_dvp_config_t;
 
-/** JPEG configuration **/
+/**
+ * @brief JPEG initialization configuration
+ */
 typedef struct esp_video_init_jpeg_config {
-    jpeg_encoder_handle_t enc_handle;
+    jpeg_encoder_handle_t enc_handle; /*!< JPEG encoder driver handle:
+                                           - NULL, JPEG video device will create JPEG encoder driver handle by itself
+                                           - Not null, JPEG video device will use this handle instead of creating JPEG
+                                         encoder driver handle */
 } esp_video_init_jpeg_config_t;
 
-/** ISP configuration **/
+/**
+ * @brief ISP initialization configuration
+ */
 typedef struct esp_video_init_isp_config {
-    int ipa_nums;
-    const char **ipa_names;
+    int ipa_nums;           /*!< Image process algorithm numbers */
+    const char **ipa_names; /*!< Image process algorithm name array */
 } esp_video_init_isp_config_t;
 
-/** Global initialization configuration **/
+/**
+ * @brief Video hardware initialization configuration
+ */
 typedef struct esp_video_init_config {
-    const esp_video_init_csi_config_t *csi;
-    const esp_video_init_dvp_config_t *dvp;
-    const esp_video_init_jpeg_config_t *jpeg;
-    const esp_video_init_isp_config_t *isp;
+    const esp_video_init_csi_config_t *csi;   /*!< MIPI CSI initialization configuration */
+    const esp_video_init_dvp_config_t *dvp;   /*!< DVP initialization configuration array */
+    const esp_video_init_jpeg_config_t *jpeg; /*!< JPEG initialization configuration */
+    const esp_video_init_isp_config_t
+        *isp; /*!< ISP initialization configuration, using default config if setting NULL */
 } esp_video_init_config_t;
 
-/** ✅ AJOUT : Structure pour les opérations V4L2 **/
-struct esp_video_ops {
-  esp_err_t (*init)(void *video);
-  esp_err_t (*deinit)(void *video);
-  esp_err_t (*start)(void *video, uint32_t type);
-  esp_err_t (*stop)(void *video, uint32_t type);
-  esp_err_t (*enum_format)(void *video, uint32_t type, uint32_t index, uint32_t *pixel_format);
-  esp_err_t (*set_format)(void *video, const void *format);
-  esp_err_t (*get_format)(void *video, void *format);
-  esp_err_t (*reqbufs)(void *video, void *reqbufs);
-  esp_err_t (*querybuf)(void *video, void *buffer);
-  esp_err_t (*qbuf)(void *video, void *buffer);
-  esp_err_t (*dqbuf)(void *video, void *buffer);
-  esp_err_t (*querycap)(void *video, void *cap);
-};
-
 /**
- * @brief Initialize video hardware and software (I2C, MIPI CSI, etc.)
+ * @brief Initialize video hardware and software, including I2C, MIPI CSI and so on.
+ *
+ * @param config video hardware configuration
+ *
+ * @return
+ *      - ESP_OK on success
+ *      - Others if failed
  */
 esp_err_t esp_video_init(const esp_video_init_config_t *config);
-
-/**
- * @brief Deinitialize and free video hardware resources.
- */
-esp_err_t esp_video_deinit(void);
-
-/**
- * @brief Register a video device with the VFS system
- * 
- * @param device_id Device number (0-3)
- * @param video_device Pointer to device context
- * @param user_ctx User context pointer
- * @param ops Pointer to operations table
- * @return ESP_OK on success
- */
-esp_err_t esp_video_register_device(int device_id, void *video_device, 
-                                    void *user_ctx, const void *ops);
 
 #ifdef __cplusplus
 }
