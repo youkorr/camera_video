@@ -13,7 +13,9 @@
 
 #include "driver/jpeg_encode.h"
 
-#include "esp_video.h"
+//#include "esp_video.h"
+#include "app_video.h"
+
 #include "esp_video_device_internal.h"
 
 #define JPEG_NAME "JPEG"
