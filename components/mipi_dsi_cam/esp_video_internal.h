@@ -222,59 +222,7 @@ typedef esp_err_t (*esp_video_m2m_process_t)(struct esp_video *video, uint8_t *s
 /**
  * @brief Video operations object.
  */
-struct esp_video_ops {
-    /*!< Initialize video hardware and allocate software resource, and must set buffer information and video format */
 
-    esp_err_t (*init)(struct esp_video *video);
-
-    /*!< De-initialize video hardware and free software resource */
-
-    esp_err_t (*deinit)(struct esp_video *video);
-
-    /*!< Start data stream */
-
-    esp_err_t (*start)(struct esp_video *video, uint32_t type);
-
-    /*!< Start data stream */
-
-    esp_err_t (*stop)(struct esp_video *video, uint32_t type);
-
-    /*!< Enumerate video format description */
-
-    esp_err_t (*enum_format)(struct esp_video *video, uint32_t type, uint32_t index, uint32_t *pixel_format);
-
-    /*!< Set video format configuration */
-
-    esp_err_t (*set_format)(struct esp_video *video, const struct v4l2_format *format);
-
-    /*!< Notify driver event triggers */
-
-    esp_err_t (*notify)(struct esp_video *video, enum esp_video_event event, void *arg);
-
-    /*!< Set external control value */
-
-    esp_err_t (*set_ext_ctrl)(struct esp_video *video, const struct v4l2_ext_controls *ctrls);
-
-    /*!< Get external control value */
-
-    esp_err_t (*get_ext_ctrl)(struct esp_video *video, struct v4l2_ext_controls *ctrls);
-
-    /*!< Query external control description */
-
-    esp_err_t (*query_ext_ctrl)(struct esp_video *video, struct v4l2_query_ext_ctrl *qctrl);
-
-    /*!< Set format to sensor */
-
-    esp_err_t (*set_sensor_format)(struct esp_video *video, const esp_cam_sensor_format_t *format);
-
-    /*!< Get format from sensor */
-
-    esp_err_t (*get_sensor_format)(struct esp_video *video, esp_cam_sensor_format_t *format);
-
-    /*!< Query menu value */
-
-    esp_err_t (*query_menu)(struct esp_video *video, struct v4l2_querymenu *qmenu);
-};
 
 #ifdef __cplusplus
 }
