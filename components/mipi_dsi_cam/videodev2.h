@@ -17,7 +17,7 @@ extern "C" {
 #include <sys/time.h>
 // #include "const.h"
 // #include "types.h"
-#include "v4l2-controls.h"
+//#include "v4l2-controls.h"
 //#include "v4l2-common.h"
 
 /* ===================== Types de base ===================== */
