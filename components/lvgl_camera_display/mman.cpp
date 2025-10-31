@@ -7,7 +7,7 @@
 #include <cstring>
 #include "esp_log.h"
 #include "esp_cache.h"
-#include "../mipi_dsi_cam/mipi_dsi_cam_v4l2_adapter.h"
+//#include "../mipi_dsi_cam/mipi_dsi_cam_v4l2_adapter.h"
 
 namespace esphome {
 namespace mipi_dsi_cam {
@@ -187,7 +187,7 @@ int munmap(void *addr, size_t length) {
     
     errno = EINVAL;
     return -1;
-//}
+}
 
 #endif // USE_ESP32_VARIANT_ESP32P4
 
