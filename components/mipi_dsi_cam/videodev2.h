@@ -848,7 +848,7 @@ struct v4l2_event_subscription {
 /* ===================== (fin IOCTL) ===================== */
 
 #ifdef __cplusplus
-}
+
 #endif
 
 #endif /* __LINUX_VIDEODEV2_H */
