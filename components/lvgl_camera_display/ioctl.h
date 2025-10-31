@@ -6,6 +6,9 @@
 
 #pragma once
 
+#include <stdint.h>
+#include <stddef.h>  // pour size_t
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -53,8 +56,15 @@ extern "C" {
 #define _IOW(type, nr, size)  _IOC(_IOC_WRITE, (type), (nr), (_IOC_TYPECHECK(size)))
 #define _IOWR(type, nr, size) _IOC(_IOC_READ | _IOC_WRITE, (type), (nr), (_IOC_TYPECHECK(size)))
 
+/* --------------------------------------------------------------------------
+ * Ajout nécessaire pour corriger l’erreur de compilation :
+ * Déclaration de la fonction ioctl()
+ * -------------------------------------------------------------------------- */
+int ioctl(int fd, unsigned long request, void *arg);
+
 #ifdef __cplusplus
 }
 #endif
+
 
 
