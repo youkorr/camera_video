@@ -22,10 +22,7 @@ namespace mipi_dsi_cam {
 
 static const char *const TAG = "mipi_dsi_cam";
 
-MipiDsiCam::MipiDsiCam() {
-  this->enable_v4l2_on_setup_ = false;
-  this->enable_isp_on_setup_ = false;
-}
+
 
 
 void MipiDsiCam::setup() {
