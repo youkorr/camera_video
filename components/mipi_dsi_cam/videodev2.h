@@ -683,7 +683,20 @@ struct v4l2_timecode {
     __u8 hours;
     __u8 userbits[4];
 };
+/*  Type  */
+#define V4L2_TC_TYPE_24FPS 1
+#define V4L2_TC_TYPE_25FPS 2
+#define V4L2_TC_TYPE_30FPS 3
+#define V4L2_TC_TYPE_50FPS 4
+#define V4L2_TC_TYPE_60FPS 5
 
+/*  Flags  */
+#define V4L2_TC_FLAG_DROPFRAME       0x0001 /* "drop-frame" mode */
+#define V4L2_TC_FLAG_COLORFRAME      0x0002
+#define V4L2_TC_USERBITS_field       0x000C
+#define V4L2_TC_USERBITS_USERDEFINED 0x0000
+#define V4L2_TC_USERBITS_8BITCHARS   0x0008
+/* The above is based on SMPTE timecodes */
 struct v4l2_plane {
     __u32 bytesused;
     __u32 length;
