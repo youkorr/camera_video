@@ -187,7 +187,7 @@ int munmap(void *addr, size_t length) {
     
     errno = EINVAL;
     return -1;
-}
+//}
 
 #endif // USE_ESP32_VARIANT_ESP32P4
 
