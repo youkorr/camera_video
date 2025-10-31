@@ -1,70 +1,28 @@
-/*
- * SPDX-FileCopyrightText: 2024 Espressif Systems (Shanghai) CO LTD
- *
- * SPDX-License-Identifier: ESPRESSIF MIT
- */
-
 #pragma once
 
-#include <stdint.h>
-#include <stddef.h>  // pour size_t
+// Ne redéclare ioctl que s'il n'est pas déjà défini par ESP-IDF
+#ifndef _SYS_IOCTL_H_  // vérifie si ESP-IDF l'a déjà inclus
+#define _SYS_IOCTL_H_
+
+// Si tu veux fournir des constantes VIDIOC_* etc. mets-les ici
+#include "../mipi_dsi_cam/videodev2.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-#define _IOC_NRBITS   8
-#define _IOC_TYPEBITS 8
-
-#ifndef _IOC_SIZEBITS
-#define _IOC_SIZEBITS 14
+// Ne redéclare PAS ioctl s’il est déjà défini
+#ifndef _IOCTL_ALREADY_DECLARED
+#define _IOCTL_ALREADY_DECLARED
+int ioctl(int fd, int request, ...);  // signature conforme à ESP-IDF
 #endif
-
-#ifndef _IOC_DIRBITS
-#define _IOC_DIRBITS 2
-#endif
-
-#ifndef _IOC_NONE
-#define _IOC_NONE 0U
-#endif
-
-#ifndef _IOC_WRITE
-#define _IOC_WRITE 1U
-#endif
-
-#ifndef _IOC_READ
-#define _IOC_READ 2U
-#endif
-
-#define _IOC_NRMASK   ((1 << _IOC_NRBITS) - 1)
-#define _IOC_TYPEMASK ((1 << _IOC_TYPEBITS) - 1)
-#define _IOC_SIZEMASK ((1 << _IOC_SIZEBITS) - 1)
-#define _IOC_DIRMASK  ((1 << _IOC_DIRBITS) - 1)
-
-#define _IOC_NRSHIFT   0
-#define _IOC_TYPESHIFT (_IOC_NRSHIFT + _IOC_NRBITS)
-#define _IOC_SIZESHIFT (_IOC_TYPESHIFT + _IOC_TYPEBITS)
-#define _IOC_DIRSHIFT  (_IOC_SIZESHIFT + _IOC_SIZEBITS)
-
-#define _IOC(dir, type, nr, size) \
-    (((dir) << _IOC_DIRSHIFT) | ((type) << _IOC_TYPESHIFT) | ((nr) << _IOC_NRSHIFT) | ((size) << _IOC_SIZESHIFT))
-
-#define _IOC_TYPECHECK(t) (sizeof(t))
-
-#define _IO(type, nr)         _IOC(_IOC_NONE, (type), (nr), 0)
-#define _IOR(type, nr, size)  _IOC(_IOC_READ, (type), (nr), (_IOC_TYPECHECK(size)))
-#define _IOW(type, nr, size)  _IOC(_IOC_WRITE, (type), (nr), (_IOC_TYPECHECK(size)))
-#define _IOWR(type, nr, size) _IOC(_IOC_READ | _IOC_WRITE, (type), (nr), (_IOC_TYPECHECK(size)))
-
-/* --------------------------------------------------------------------------
- * Ajout nécessaire pour corriger l’erreur de compilation :
- * Déclaration de la fonction ioctl()
- * -------------------------------------------------------------------------- */
-int ioctl(int fd, unsigned long request, void *arg);
 
 #ifdef __cplusplus
 }
 #endif
+
+#endif // _SYS_IOCTL_H_
+
 
 
 
