@@ -98,16 +98,25 @@ typedef int64_t  __s64;
 
 /* ===================== Fields / types / mémoire ===================== */
 enum v4l2_field {
-    V4L2_FIELD_ANY = 0,
-    V4L2_FIELD_NONE = 1,
-    V4L2_FIELD_TOP = 2,
-    V4L2_FIELD_BOTTOM = 3,
-    V4L2_FIELD_INTERLACED = 4,
-    V4L2_FIELD_SEQ_TB = 5,
-    V4L2_FIELD_SEQ_BT = 6,
-    V4L2_FIELD_ALTERNATE = 7,
-    V4L2_FIELD_INTERLACED_TB = 8,
-    V4L2_FIELD_INTERLACED_BT = 9
+    V4L2_FIELD_ANY = 0,           /* driver can choose from none,
+                     top, bottom, interlaced
+                     depending on whatever it thinks
+                     is approximate ... */
+    V4L2_FIELD_NONE       = 1,    /* this device has no fields ... */
+    V4L2_FIELD_TOP        = 2,    /* top field only */
+    V4L2_FIELD_BOTTOM     = 3,    /* bottom field only */
+    V4L2_FIELD_INTERLACED = 4,    /* both fields interlaced */
+    V4L2_FIELD_SEQ_TB     = 5,    /* both fields sequential into one
+                     buffer, top-bottom order */
+    V4L2_FIELD_SEQ_BT    = 6,     /* same as above + bottom-top order */
+    V4L2_FIELD_ALTERNATE = 7,     /* both fields alternating into
+                     separate buffers */
+    V4L2_FIELD_INTERLACED_TB = 8, /* both fields interlaced, top field
+                     first and the top field is
+                     transmitted first */
+    V4L2_FIELD_INTERLACED_BT = 9, /* both fields interlaced, top field
+                     first and the bottom field is
+                     transmitted first */
 };
 
 enum v4l2_buf_type {
@@ -118,20 +127,27 @@ enum v4l2_buf_type {
     V4L2_BUF_TYPE_VBI_OUTPUT           = 5,
     V4L2_BUF_TYPE_SLICED_VBI_CAPTURE   = 6,
     V4L2_BUF_TYPE_SLICED_VBI_OUTPUT    = 7,
+    V4L2_BUF_TYPE_VIDEO_OUTPUT_OVERLAY = 8,
     V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE = 9,
     V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE  = 10,
     V4L2_BUF_TYPE_SDR_CAPTURE          = 11,
     V4L2_BUF_TYPE_SDR_OUTPUT           = 12,
     V4L2_BUF_TYPE_META_CAPTURE         = 13,
-    V4L2_BUF_TYPE_META_OUTPUT          = 14
+    V4L2_BUF_TYPE_META_OUTPUT          = 14,
+    /* Deprecated, do not use */
+    V4L2_BUF_TYPE_PRIVATE = 0x80,
 };
 
-#define V4L2_TYPE_IS_MULTIPLANAR(t) \
-   ((t)==V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE || (t)==V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE)
-#define V4L2_TYPE_IS_OUTPUT(t) \
-   ((t)==V4L2_BUF_TYPE_VIDEO_OUTPUT || (t)==V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE || \
-    (t)==V4L2_BUF_TYPE_VIDEO_OVERLAY || (t)==V4L2_BUF_TYPE_SDR_OUTPUT || \
-    (t)==V4L2_BUF_TYPE_META_OUTPUT)
+#define V4L2_TYPE_IS_MULTIPLANAR(type) \
+    ((type) == V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE || (type) == V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE)
+
+#define V4L2_TYPE_IS_OUTPUT(type)                                                             \
+    ((type) == V4L2_BUF_TYPE_VIDEO_OUTPUT || (type) == V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE ||   \
+     (type) == V4L2_BUF_TYPE_VIDEO_OVERLAY || (type) == V4L2_BUF_TYPE_VIDEO_OUTPUT_OVERLAY || \
+     (type) == V4L2_BUF_TYPE_VBI_OUTPUT || (type) == V4L2_BUF_TYPE_SLICED_VBI_OUTPUT ||       \
+     (type) == V4L2_BUF_TYPE_SDR_OUTPUT || (type) == V4L2_BUF_TYPE_META_OUTPUT)
+
+#define V4L2_TYPE_IS_CAPTURE(type) (!V4L2_TYPE_IS_OUTPUT(type))
 
 enum v4l2_memory {
     V4L2_MEMORY_MMAP    = 1,
@@ -142,21 +158,87 @@ enum v4l2_memory {
 
 /* ===================== Colorimétrie ===================== */
 enum v4l2_colorspace {
+    /*
+     * Default colorspace, i.e. let the driver figure it out.
+     * Can only be used with video capture.
+     */
     V4L2_COLORSPACE_DEFAULT = 0,
+
+    /* SMPTE 170M: used for broadcast NTSC/PAL SDTV */
     V4L2_COLORSPACE_SMPTE170M = 1,
+
+    /* Obsolete pre-1998 SMPTE 240M HDTV standard, superseded by Rec 709 */
     V4L2_COLORSPACE_SMPTE240M = 2,
+
+    /* Rec.709: used for HDTV */
     V4L2_COLORSPACE_REC709 = 3,
+
+    /*
+     * Deprecated, do not use. No driver will ever return this. This was
+     * based on a misunderstanding of the bt878 datasheet.
+     */
     V4L2_COLORSPACE_BT878 = 4,
+
+    /*
+     * NTSC 1953 colorspace. This only makes sense when dealing with
+     * really, really old NTSC recordings. Superseded by SMPTE 170M.
+     */
     V4L2_COLORSPACE_470_SYSTEM_M = 5,
+
+    /*
+     * EBU Tech 3213 PAL/SECAM colorspace.
+     */
     V4L2_COLORSPACE_470_SYSTEM_BG = 6,
+
+    /*
+     * Effectively shorthand for V4L2_COLORSPACE_SRGB, V4L2_YCBCR_ENC_601
+     * and V4L2_QUANTIZATION_FULL_RANGE. To be used for (Motion-)JPEG.
+     */
     V4L2_COLORSPACE_JPEG = 7,
+
+    /* For RGB colorspaces such as produces by most webcams. */
     V4L2_COLORSPACE_SRGB = 8,
+
+    /* opRGB colorspace */
     V4L2_COLORSPACE_OPRGB = 9,
+
+    /* BT.2020 colorspace, used for UHDTV. */
     V4L2_COLORSPACE_BT2020 = 10,
+
+    /* Raw colorspace: for RAW unprocessed images */
     V4L2_COLORSPACE_RAW = 11,
-    V4L2_COLORSPACE_DCI_P3 = 12
+
+    /* DCI-P3 colorspace, used by cinema projectors */
+    V4L2_COLORSPACE_DCI_P3 = 12,
+};
+
+/*
+ * Determine how COLORSPACE_DEFAULT should map to a proper colorspace.
+ * This depends on whether this is a SDTV image (use SMPTE 170M), an
+ * HDTV image (use Rec. 709), or something else (use sRGB).
+ */
+#define V4L2_MAP_COLORSPACE_DEFAULT(is_sdtv, is_hdtv) \
+    ((is_sdtv) ? V4L2_COLORSPACE_SMPTE170M : ((is_hdtv) ? V4L2_COLORSPACE_REC709 : V4L2_COLORSPACE_SRGB))
 };
 enum v4l2_xfer_func {
+    /*
+     * Mapping of V4L2_XFER_FUNC_DEFAULT to actual transfer functions
+     * for the various colorspaces:
+     *
+     * V4L2_COLORSPACE_SMPTE170M, V4L2_COLORSPACE_470_SYSTEM_M,
+     * V4L2_COLORSPACE_470_SYSTEM_BG, V4L2_COLORSPACE_REC709 and
+     * V4L2_COLORSPACE_BT2020: V4L2_XFER_FUNC_709
+     *
+     * V4L2_COLORSPACE_SRGB, V4L2_COLORSPACE_JPEG: V4L2_XFER_FUNC_SRGB
+     *
+     * V4L2_COLORSPACE_OPRGB: V4L2_XFER_FUNC_OPRGB
+     *
+     * V4L2_COLORSPACE_SMPTE240M: V4L2_XFER_FUNC_SMPTE240M
+     *
+     * V4L2_COLORSPACE_RAW: V4L2_XFER_FUNC_NONE
+     *
+     * V4L2_COLORSPACE_DCI_P3: V4L2_XFER_FUNC_DCI_P3
+     */
     V4L2_XFER_FUNC_DEFAULT   = 0,
     V4L2_XFER_FUNC_709       = 1,
     V4L2_XFER_FUNC_SRGB      = 2,
@@ -164,18 +246,71 @@ enum v4l2_xfer_func {
     V4L2_XFER_FUNC_SMPTE240M = 4,
     V4L2_XFER_FUNC_NONE      = 5,
     V4L2_XFER_FUNC_DCI_P3    = 6,
-    V4L2_XFER_FUNC_SMPTE2084 = 7
+    V4L2_XFER_FUNC_SMPTE2084 = 7,
+};
+
+/*
+ * Determine how XFER_FUNC_DEFAULT should map to a proper transfer function.
+ * This depends on the colorspace.
+ */
+#define V4L2_MAP_XFER_FUNC_DEFAULT(colsp)                                                           \
+    ((colsp) == V4L2_COLORSPACE_OPRGB                                                               \
+         ? V4L2_XFER_FUNC_OPRGB                                                                     \
+         : ((colsp) == V4L2_COLORSPACE_SMPTE240M                                                    \
+                ? V4L2_XFER_FUNC_SMPTE240M                                                          \
+                : ((colsp) == V4L2_COLORSPACE_DCI_P3                                                \
+                       ? V4L2_XFER_FUNC_DCI_P3                                                      \
+                       : ((colsp) == V4L2_COLORSPACE_RAW                                            \
+                              ? V4L2_XFER_FUNC_NONE                                                 \
+                              : ((colsp) == V4L2_COLORSPACE_SRGB || (colsp) == V4L2_COLORSPACE_JPEG \
+                                     ? V4L2_XFER_FUNC_SRGB                                          \
+                                     : V4L2_XFER_FUNC_709)))))
+
 };
 enum v4l2_ycbcr_encoding {
+    /*
+     * Mapping of V4L2_YCBCR_ENC_DEFAULT to actual encodings for the
+     * various colorspaces:
+     *
+     * V4L2_COLORSPACE_SMPTE170M, V4L2_COLORSPACE_470_SYSTEM_M,
+     * V4L2_COLORSPACE_470_SYSTEM_BG, V4L2_COLORSPACE_SRGB,
+     * V4L2_COLORSPACE_OPRGB and V4L2_COLORSPACE_JPEG: V4L2_YCBCR_ENC_601
+     *
+     * V4L2_COLORSPACE_REC709 and V4L2_COLORSPACE_DCI_P3: V4L2_YCBCR_ENC_709
+     *
+     * V4L2_COLORSPACE_BT2020: V4L2_YCBCR_ENC_BT2020
+     *
+     * V4L2_COLORSPACE_SMPTE240M: V4L2_YCBCR_ENC_SMPTE240M
+     */
     V4L2_YCBCR_ENC_DEFAULT = 0,
+
+    /* ITU-R 601 -- SDTV */
     V4L2_YCBCR_ENC_601 = 1,
+
+    /* Rec. 709 -- HDTV */
     V4L2_YCBCR_ENC_709 = 2,
+
+    /* ITU-R 601/EN 61966-2-4 Extended Gamut -- SDTV */
     V4L2_YCBCR_ENC_XV601 = 3,
+
+    /* Rec. 709/EN 61966-2-4 Extended Gamut -- HDTV */
     V4L2_YCBCR_ENC_XV709 = 4,
-    V4L2_YCBCR_ENC_SYCC  = 5,
+
+    /*
+     * sYCC (Y'CbCr encoding of sRGB), identical to ENC_601. It was added
+     * originally due to a misunderstanding of the sYCC standard. It should
+     * not be used, instead use V4L2_YCBCR_ENC_601.
+     */
+    V4L2_YCBCR_ENC_SYCC = 5,
+
+    /* BT.2020 Non-constant Luminance Y'CbCr */
     V4L2_YCBCR_ENC_BT2020 = 6,
+
+    /* BT.2020 Constant Luminance Y'CbcCrc */
     V4L2_YCBCR_ENC_BT2020_CONST_LUM = 7,
-    V4L2_YCBCR_ENC_SMPTE240M = 8
+
+    /* SMPTE 240M -- Obsolete HDTV */
+    V4L2_YCBCR_ENC_SMPTE240M = 8,
 };
 enum v4l2_hsv_encoding {
     V4L2_HSV_ENC_180 = 128,
