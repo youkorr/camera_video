@@ -198,8 +198,8 @@ protected:
   // Adaptateurs optionnels
   MipiDsiCamV4L2Adapter *v4l2_adapter_{nullptr};
   MipiDsiCamISPPipeline *isp_pipeline_{nullptr};
-  bool enable_v4l2_on_setup_{false};
-  bool enable_isp_on_setup_{false};
+  bool enable_v4l2_on_setup_{true};
+  bool enable_isp_on_setup_{true};
   
   // Méthodes d'initialisation
   bool create_sensor_driver_();
