@@ -8,7 +8,7 @@
 
 #include "esp_err.h"
 //#include "esp_cam_sensor_types.h"
-//#include "driver/jpeg_encode.h"
+#include "driver/jpeg_encode.h"
 #include "esp_video_device.h"
 //#include "hal/cam_ctlr_types.h"
 #include "videodev2.h"
