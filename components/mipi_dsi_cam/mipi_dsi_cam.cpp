@@ -22,6 +22,10 @@ namespace mipi_dsi_cam {
 
 static const char *const TAG = "mipi_dsi_cam";
 
+enable_v4l2_on_setup_ = false;
+enable_isp_on_setup_ = false;
+
+
 void MipiDsiCam::setup() {
   ESP_LOGI(TAG, "Init MIPI Camera");
   ESP_LOGI(TAG, "  Sensor type: %s", this->sensor_type_.c_str());
