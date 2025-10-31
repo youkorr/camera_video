@@ -385,7 +385,7 @@ bool IRAM_ATTR MipiDsiCam::on_csi_frame_done_(
 }
 
 bool MipiDsiCam::start_streaming() {
-  if (!this->initialized_ || this->streaming_) {
+  if (!this->initialized_  {
     ESP_LOGW(TAG, "Cannot start: initialized=%d streaming=%d", this->initialized_, this->streaming_);
     return false;
   }
