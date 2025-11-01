@@ -90,19 +90,19 @@ typedef struct esp_video_init_config {
 } esp_video_init_config_t;
 
 /** ✅ AJOUT : Structure pour les opérations V4L2 **/
-struct esp_video_ops {
-  esp_err_t (*init)(void *video);
-  esp_err_t (*deinit)(void *video);
-  esp_err_t (*start)(void *video, uint32_t type);
-  esp_err_t (*stop)(void *video, uint32_t type);
-  esp_err_t (*enum_format)(void *video, uint32_t type, uint32_t index, uint32_t *pixel_format);
-  esp_err_t (*set_format)(void *video, const void *format);
-  esp_err_t (*get_format)(void *video, void *format);
-  esp_err_t (*reqbufs)(void *video, void *reqbufs);
-  esp_err_t (*querybuf)(void *video, void *buffer);
-  esp_err_t (*qbuf)(void *video, void *buffer);
-  esp_err_t (*dqbuf)(void *video, void *buffer);
-  esp_err_t (*querycap)(void *video, void *cap);
+// struct esp_video_ops {
+  // esp_err_t (*init)(void *video);
+  // esp_err_t (*deinit)(void *video);
+  // esp_err_t (*start)(void *video, uint32_t type);
+  // esp_err_t (*stop)(void *video, uint32_t type);
+  // esp_err_t (*enum_format)(void *video, uint32_t type, uint32_t index, uint32_t *pixel_format);
+  // esp_err_t (*set_format)(void *video, const void *format);
+  // esp_err_t (*get_format)(void *video, void *format);
+  // esp_err_t (*reqbufs)(void *video, void *reqbufs);
+  // esp_err_t (*querybuf)(void *video, void *buffer);
+  // esp_err_t (*qbuf)(void *video, void *buffer);
+  // esp_err_t (*dqbuf)(void *video, void *buffer);
+  // esp_err_t (*querycap)(void *video, void *cap);
 };
 
 /**
