@@ -14,7 +14,7 @@
 #include "esp_err.h"
 #include "../mipi_dsi_cam/videodev2.h"
 #include "../mipi_dsi_cam/esp_video_buffer.h"
-#include "esp_video_internal.h"
+//#include "esp_video_internal.h"
 
 #ifdef __cplusplus
 extern "C" {
