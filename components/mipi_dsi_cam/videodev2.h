@@ -940,6 +940,7 @@ struct v4l2_framebuffer {
 #define V4L2_FBUF_FLAG_LOCAL_INV_ALPHA 0x0020
 #define V4L2_FBUF_FLAG_SRC_CHROMAKEY   0x0040
 
+/* --- overlay/window/framebuffer --- */
 struct v4l2_clip {
     struct v4l2_rect c;
     struct v4l2_clip *next;
@@ -1061,8 +1062,7 @@ struct v4l2_selection {
 #define V4L2_BUF_FLAG_ERROR          0x00000040
 #define V4L2_BUF_FLAG_TIMESTAMP_MASK 0x0000e000
 
- *      A N A L O G   V I D E O   S T A N D A R D
- */
+
 
 typedef __u64 v4l2_std_id;
 
@@ -1159,14 +1159,6 @@ typedef __u64 v4l2_std_id;
 #define V4L2_STD_UNKNOWN 0
 #define V4L2_STD_ALL     (V4L2_STD_525_60 | V4L2_STD_625_50)
 
-struct v4l2_standard {
-    __u32 index;
-    v4l2_std_id id;
-    __u8 name[24];
-    struct v4l2_fract frameperiod; /* Frames, not fields */
-    __u32 framelines;
-    __u32 reserved[4];
-};
 
 struct v4l2_bt_timings {
     __u32 width;
@@ -1336,79 +1328,7 @@ struct v4l2_dv_timings_cap {
     };
 };
 
- *	V I D E O   I N P U T S
- */
-struct v4l2_input {
-    __u32 index;    /*  Which input */
-    __u8 name[32];  /*  Label */
-    __u32 type;     /*  Type of input */
-    __u32 audioset; /*  Associated audios (bitfield) */
-    __u32 tuner;    /*  enum v4l2_tuner_type */
-    v4l2_std_id std;
-    __u32 status;
-    __u32 capabilities;
-    __u32 reserved[3];
-};
 
-/*  Values for the 'type' field */
-#define V4L2_INPUT_TYPE_TUNER  1
-#define V4L2_INPUT_TYPE_CAMERA 2
-#define V4L2_INPUT_TYPE_TOUCH  3
-
-/* field 'status' - general */
-#define V4L2_IN_ST_NO_POWER  0x00000001 /* Attached device is off */
-#define V4L2_IN_ST_NO_SIGNAL 0x00000002
-#define V4L2_IN_ST_NO_COLOR  0x00000004
-
-/* field 'status' - sensor orientation */
-/* If sensor is mounted upside down set both bits */
-#define V4L2_IN_ST_HFLIP 0x00000010 /* Frames are flipped horizontally */
-#define V4L2_IN_ST_VFLIP 0x00000020 /* Frames are flipped vertically */
-
-/* field 'status' - analog */
-#define V4L2_IN_ST_NO_H_LOCK   0x00000100 /* No horizontal sync lock */
-#define V4L2_IN_ST_COLOR_KILL  0x00000200 /* Color killer is active */
-#define V4L2_IN_ST_NO_V_LOCK   0x00000400 /* No vertical sync lock */
-#define V4L2_IN_ST_NO_STD_LOCK 0x00000800 /* No standard format lock */
-
-/* field 'status' - digital */
-#define V4L2_IN_ST_NO_SYNC    0x00010000 /* No synchronization lock */
-#define V4L2_IN_ST_NO_EQU     0x00020000 /* No equalizer lock */
-#define V4L2_IN_ST_NO_CARRIER 0x00040000 /* Carrier recovery failed */
-
-/* field 'status' - VCR and set-top box */
-#define V4L2_IN_ST_MACROVISION 0x01000000 /* Macrovision detected */
-#define V4L2_IN_ST_NO_ACCESS   0x02000000 /* Conditional access denied */
-#define V4L2_IN_ST_VTR         0x04000000 /* VTR time constant */
-
-/* capabilities flags */
-#define V4L2_IN_CAP_DV_TIMINGS     0x00000002             /* Supports S_DV_TIMINGS */
-#define V4L2_IN_CAP_CUSTOM_TIMINGS V4L2_IN_CAP_DV_TIMINGS /* For compatibility */
-#define V4L2_IN_CAP_STD            0x00000004             /* Supports S_STD */
-#define V4L2_IN_CAP_NATIVE_SIZE    0x00000008             /* Supports setting native size */
-
- *	V I D E O   O U T P U T S
- */
-struct v4l2_output {
-    __u32 index;     /*  Which output */
-    __u8 name[32];   /*  Label */
-    __u32 type;      /*  Type of output */
-    __u32 audioset;  /*  Associated audios (bitfield) */
-    __u32 modulator; /*  Associated modulator */
-    v4l2_std_id std;
-    __u32 capabilities;
-    __u32 reserved[3];
-};
-/*  Values for the 'type' field */
-#define V4L2_OUTPUT_TYPE_MODULATOR        1
-#define V4L2_OUTPUT_TYPE_ANALOG           2
-#define V4L2_OUTPUT_TYPE_ANALOGVGAOVERLAY 3
-
-/* capabilities flags */
-#define V4L2_OUT_CAP_DV_TIMINGS     0x00000002              /* Supports S_DV_TIMINGS */
-#define V4L2_OUT_CAP_CUSTOM_TIMINGS V4L2_OUT_CAP_DV_TIMINGS /* For compatibility */
-#define V4L2_OUT_CAP_STD            0x00000004              /* Supports S_STD */
-#define V4L2_OUT_CAP_NATIVE_SIZE    0x00000008              /* Supports setting native size */
 
 
 struct v4l2_requestbuffers {
