@@ -8,7 +8,7 @@
 
 #include "ioctl.h"
 #include "esp_vfs.h"
-#include "esp_video.h"
+//#include "esp_video.h"
 
 #ifdef __cplusplus
 extern "C" {
