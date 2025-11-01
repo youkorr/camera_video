@@ -1240,13 +1240,32 @@ struct v4l2_query_ext_ctrl {
 /* Structure JPEG (legacy mais pratique) */
 struct v4l2_jpegcompression {
     int quality;
-    int APPn;                /* 0 à 15 */
-    int APP_len;
-    char *APP_data;
-    int COM_len;
-    char *COM_data;
-    __u32 jpeg_markers;      /* masques pour marquers à inclure */
-    __u32 reserved[3];
+
+    int APPn;          /* Number of APP segment to be written,
+                        * must be 0..15 */
+    int APP_len;       /* Length of data in JPEG APPn segment */
+    char APP_data[60]; /* Data in the JPEG APPn segment. */
+
+    int COM_len;       /* Length of data in JPEG COM segment */
+    char COM_data[60]; /* Data in JPEG COM segment */
+
+    __u32 jpeg_markers; /* Which markers should go into the JPEG
+                         * output. Unless you exactly know what
+                         * you do, leave them untouched.
+                         * Including less markers will make the
+                         * resulting code smaller, but there will
+                         * be fewer applications which can read it.
+                         * The presence of the APP and COM marker
+                         * is influenced by APP_len and COM_len
+                         * ONLY, not by this property! */
+
+#define V4L2_JPEG_MARKER_DHT (1 << 3) /* Define Huffman Tables */
+#define V4L2_JPEG_MARKER_DQT (1 << 4) /* Define Quantization Tables */
+#define V4L2_JPEG_MARKER_DRI (1 << 5) /* Define Restart Interval */
+#define V4L2_JPEG_MARKER_COM (1 << 6) /* Comment segment */
+#define V4L2_JPEG_MARKER_APP             \
+    (1 << 7) /* App segment, driver will \
+              * always use APP0 */
 };
 
 /* ===================== Pixels formats (sélection large) ===================== */
