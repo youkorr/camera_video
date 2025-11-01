@@ -11,7 +11,7 @@
 #include "esp_check.h"
 #include "esp_memory_utils.h"
 #include "esp_heap_caps.h"
-//#include "esp_video.h"
+#include "esp_video.h"
 //#include "esp_video_vfs.h"
 #include "../mipi_dsi_cam/mipi_dsi_cam.h"
 
