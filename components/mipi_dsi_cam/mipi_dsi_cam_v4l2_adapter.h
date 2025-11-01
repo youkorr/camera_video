@@ -7,6 +7,8 @@
 
 extern "C" {
   #include "videodev2.h"
+  #include "v4l2-controls.h"
+  #include "v4l2-common.h"
 }
 
 // Déclaration de la fonction d'enregistrement du device
