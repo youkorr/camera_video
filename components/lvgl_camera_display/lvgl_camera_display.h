@@ -8,10 +8,7 @@
 #include <fcntl.h>
 #include "ioctl.h"
 #include "mman.h"
-#include "esp_vfs.h"
-#include "esp_vfs_dev.h"
-#include "esp_video_vfs.h"
-#include "esp_video_ioctl_internal.h"
+
 #include "../lvgl_camera_display/mman.h"
 #include "../mipi_dsi_cam/videodev2.h"
 #include "../mipi_dsi_cam/esp_video_device.h"
