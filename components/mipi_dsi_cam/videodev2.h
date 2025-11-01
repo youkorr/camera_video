@@ -164,6 +164,8 @@ enum v4l2_colorspace {
     V4L2_COLORSPACE_RAW = 11,
     V4L2_COLORSPACE_DCI_P3 = 12
 };
+#define V4L2_MAP_COLORSPACE_DEFAULT(is_sdtv, is_hdtv) \
+    ((is_sdtv) ? V4L2_COLORSPACE_SMPTE170M : ((is_hdtv) ? V4L2_COLORSPACE_REC709 : V4L2_COLORSPACE_SRGB))
 enum v4l2_xfer_func {
     V4L2_XFER_FUNC_DEFAULT   = 0,
     V4L2_XFER_FUNC_709       = 1,
@@ -174,6 +176,18 @@ enum v4l2_xfer_func {
     V4L2_XFER_FUNC_DCI_P3    = 6,
     V4L2_XFER_FUNC_SMPTE2084 = 7
 };
+#define V4L2_MAP_XFER_FUNC_DEFAULT(colsp)                                                           \
+    ((colsp) == V4L2_COLORSPACE_OPRGB                                                               \
+         ? V4L2_XFER_FUNC_OPRGB                                                                     \
+         : ((colsp) == V4L2_COLORSPACE_SMPTE240M                                                    \
+                ? V4L2_XFER_FUNC_SMPTE240M                                                          \
+                : ((colsp) == V4L2_COLORSPACE_DCI_P3                                                \
+                       ? V4L2_XFER_FUNC_DCI_P3                                                      \
+                       : ((colsp) == V4L2_COLORSPACE_RAW                                            \
+                              ? V4L2_XFER_FUNC_NONE                                                 \
+                              : ((colsp) == V4L2_COLORSPACE_SRGB || (colsp) == V4L2_COLORSPACE_JPEG \
+                                     ? V4L2_XFER_FUNC_SRGB                                          \
+                                     : V4L2_XFER_FUNC_709)))))
 enum v4l2_ycbcr_encoding {
     V4L2_YCBCR_ENC_DEFAULT = 0,
     V4L2_YCBCR_ENC_601 = 1,
@@ -189,15 +203,41 @@ enum v4l2_hsv_encoding {
     V4L2_HSV_ENC_180 = 128,
     V4L2_HSV_ENC_256 = 129
 };
+#define V4L2_MAP_YCBCR_ENC_DEFAULT(colsp)                                     \
+    (((colsp) == V4L2_COLORSPACE_REC709 || (colsp) == V4L2_COLORSPACE_DCI_P3) \
+         ? V4L2_YCBCR_ENC_709                                                 \
+         : ((colsp) == V4L2_COLORSPACE_BT2020                                 \
+                ? V4L2_YCBCR_ENC_BT2020                                       \
+                : ((colsp) == V4L2_COLORSPACE_SMPTE240M ? V4L2_YCBCR_ENC_SMPTE240M : V4L2_YCBCR_ENC_601)))
 enum v4l2_quantization {
     V4L2_QUANTIZATION_DEFAULT    = 0,
     V4L2_QUANTIZATION_FULL_RANGE = 1,
     V4L2_QUANTIZATION_LIM_RANGE  = 2
 };
 
+#define V4L2_MAP_QUANTIZATION_DEFAULT(is_rgb_or_hsv, colsp, ycbcr_enc) \
+    (((is_rgb_or_hsv) || (colsp) == V4L2_COLORSPACE_JPEG) ? V4L2_QUANTIZATION_FULL_RANGE : V4L2_QUANTIZATION_LIM_RANGE)
+
+/*
+ * Deprecated names for opRGB colorspace (IEC 61966-2-5)
+ *
+ * WARNING: Please don't use these deprecated defines in your code, as
+ * there is a chance we have to remove them in the future.
+ */
+#define V4L2_COLORSPACE_ADOBERGB V4L2_COLORSPACE_OPRGB
+#define V4L2_XFER_FUNC_ADOBERGB  V4L2_XFER_FUNC_OPRGB
+
 struct v4l2_rect  { __s32 left; __s32 top; __u32 width; __u32 height; };
 struct v4l2_fract { __u32 numerator; __u32 denominator; };
 struct v4l2_area  { __u32 width; __u32 height; };
+
+enum v4l2_priority {
+    V4L2_PRIORITY_UNSET       = 0, /* not initialized */
+    V4L2_PRIORITY_BACKGROUND  = 1,
+    V4L2_PRIORITY_INTERACTIVE = 2,
+    V4L2_PRIORITY_RECORD      = 3,
+    V4L2_PRIORITY_DEFAULT     = V4L2_PRIORITY_INTERACTIVE,
+};
 
 /* ===================== Caps / formats ===================== */
 struct v4l2_capability {
