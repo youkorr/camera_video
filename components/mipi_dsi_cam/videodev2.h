@@ -1604,54 +1604,7 @@ struct v4l2_ext_controls {
     struct v4l2_ext_control *controls;
 };
 
-#define V4L2_CTRL_ID_MASK           (0x0fffffff)
-#define V4L2_CTRL_ID2CLASS(id)      ((id)&0x0fff0000UL)
-#define V4L2_CTRL_ID2WHICH(id)      ((id)&0x0fff0000UL)
-#define V4L2_CTRL_DRIVER_PRIV(id)   (((id)&0xffff) >= 0x1000)
-#define V4L2_CTRL_MAX_DIMS          (4)
-#define V4L2_CTRL_WHICH_CUR_VAL     0
-#define V4L2_CTRL_WHICH_DEF_VAL     0x0f000000
-#define V4L2_CTRL_WHICH_REQUEST_VAL 0x0f010000
 
-enum v4l2_ctrl_type {
-    V4L2_CTRL_TYPE_INTEGER      = 1,
-    V4L2_CTRL_TYPE_BOOLEAN      = 2,
-    V4L2_CTRL_TYPE_MENU         = 3,
-    V4L2_CTRL_TYPE_BUTTON       = 4,
-    V4L2_CTRL_TYPE_INTEGER64    = 5,
-    V4L2_CTRL_TYPE_CTRL_CLASS   = 6,
-    V4L2_CTRL_TYPE_STRING       = 7,
-    V4L2_CTRL_TYPE_BITMASK      = 8,
-    V4L2_CTRL_TYPE_INTEGER_MENU = 9,
-
-    /* Compound types are >= 0x0100 */
-    V4L2_CTRL_COMPOUND_TYPES = 0x0100,
-    V4L2_CTRL_TYPE_U8        = 0x0100,
-    V4L2_CTRL_TYPE_U16       = 0x0101,
-    V4L2_CTRL_TYPE_U32       = 0x0102,
-    V4L2_CTRL_TYPE_AREA      = 0x0106,
-
-    V4L2_CTRL_TYPE_HDR10_CLL_INFO          = 0x0110,
-    V4L2_CTRL_TYPE_HDR10_MASTERING_DISPLAY = 0x0111,
-
-    V4L2_CTRL_TYPE_H264_SPS            = 0x0200,
-    V4L2_CTRL_TYPE_H264_PPS            = 0x0201,
-    V4L2_CTRL_TYPE_H264_SCALING_MATRIX = 0x0202,
-    V4L2_CTRL_TYPE_H264_SLICE_PARAMS   = 0x0203,
-    V4L2_CTRL_TYPE_H264_DECODE_PARAMS  = 0x0204,
-    V4L2_CTRL_TYPE_H264_PRED_WEIGHTS   = 0x0205,
-
-    V4L2_CTRL_TYPE_FWHT_PARAMS = 0x0220,
-
-    V4L2_CTRL_TYPE_VP8_FRAME = 0x0240,
-
-    V4L2_CTRL_TYPE_MPEG2_QUANTISATION = 0x0250,
-    V4L2_CTRL_TYPE_MPEG2_SEQUENCE     = 0x0251,
-    V4L2_CTRL_TYPE_MPEG2_PICTURE      = 0x0252,
-
-    V4L2_CTRL_TYPE_VP9_COMPRESSED_HDR = 0x0260,
-    V4L2_CTRL_TYPE_VP9_FRAME          = 0x0261,
-};
 
 
 struct v4l2_query_ext_ctrl {
