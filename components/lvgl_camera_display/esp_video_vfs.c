@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: ESPRESSIF MIT
  */
 
+extern "C" {
 #include <inttypes.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -13,12 +14,14 @@
 #include <sys/lock.h>
 #include <sys/errno.h>
 #include <sys/param.h>
-#include "../mipi_dsi_cam/videodev2.h"
 #include "esp_log.h"
 #include "esp_vfs.h"
 #include "esp_vfs_dev.h"
 #include "esp_video_vfs.h"
 #include "esp_video_ioctl_internal.h"
+}
+
+#include "../mipi_dsi_cam/videodev2.h"
 
 static int esp_err_to_errno(esp_err_t err)
 {
@@ -55,8 +58,6 @@ static int esp_video_vfs_open(void *ctx, const char *path, int flags, int mode)
 {
     struct esp_video *video = (struct esp_video *)ctx;
 
-    /* Open video here to initialize software resource and hardware */
-
     video = esp_video_open(video->dev_name);
     if (!video) {
         errno = ENOENT;
@@ -74,7 +75,6 @@ static ssize_t esp_video_vfs_write(void *ctx, int fd, const void *data, size_t s
     assert(video);
 
     errno = EPERM;
-
     return -1;
 }
 
@@ -86,7 +86,6 @@ static ssize_t esp_video_vfs_read(void *ctx, int fd, void *data, size_t size)
     assert(video);
 
     errno = EPERM;
-
     return -1;
 }
 
@@ -98,7 +97,6 @@ static int esp_video_vfs_fstat(void *ctx, int fd, struct stat *st)
     assert(video);
 
     memset(st, 0, sizeof(*st));
-
     return 0;
 }
 
@@ -111,7 +109,6 @@ static int esp_video_vfs_close(void *ctx, int fd)
     assert(video);
 
     ret = esp_video_close(video);
-
     return esp_err_to_errno(ret);
 }
 
@@ -155,30 +152,21 @@ static int esp_video_vfs_ioctl(void *ctx, int fd, int cmd, va_list args)
     assert(video);
 
     ret = esp_video_ioctl(video, cmd, args);
-
     return esp_err_to_errno(ret);
 }
 
-static const esp_vfs_t s_esp_video_vfs = {.flags   = ESP_VFS_FLAG_CONTEXT_PTR,
-                                          .open_p  = esp_video_vfs_open,
-                                          .close_p = esp_video_vfs_close,
-                                          .write_p = esp_video_vfs_write,
-                                          .read_p  = esp_video_vfs_read,
-                                          .fcntl_p = esp_video_vfs_fcntl,
-                                          .fsync_p = esp_video_vfs_fsync,
-                                          .fstat_p = esp_video_vfs_fstat,
-                                          .ioctl_p = esp_video_vfs_ioctl};
+static const esp_vfs_t s_esp_video_vfs = {
+    .flags   = ESP_VFS_FLAG_CONTEXT_PTR,
+    .open_p  = esp_video_vfs_open,
+    .close_p = esp_video_vfs_close,
+    .write_p = esp_video_vfs_write,
+    .read_p  = esp_video_vfs_read,
+    .fcntl_p = esp_video_vfs_fcntl,
+    .fsync_p = esp_video_vfs_fsync,
+    .fstat_p = esp_video_vfs_fstat,
+    .ioctl_p = esp_video_vfs_ioctl
+};
 
-/**
- * @brief Register video device into VFS system.
- *
- * @param name Video device name
- * @param video Video object
- *
- * @return
- *      - ESP_OK on success
- *      - Others if failed
- */
 esp_err_t esp_video_vfs_dev_register(const char *name, struct esp_video *video)
 {
     esp_err_t ret;
@@ -195,15 +183,6 @@ esp_err_t esp_video_vfs_dev_register(const char *name, struct esp_video *video)
     return ret;
 }
 
-/**
- * @brief Unregister video device from VFS system.
- *
- * @param name Video device name
- *
- * @return
- *      - ESP_OK on success
- *      - Others if failed
- */
 esp_err_t esp_video_vfs_dev_unregister(const char *name)
 {
     esp_err_t ret;
@@ -219,3 +198,4 @@ esp_err_t esp_video_vfs_dev_unregister(const char *name)
 
     return ret;
 }
+
