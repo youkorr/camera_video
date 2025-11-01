@@ -8,7 +8,7 @@
 
 #include "ioctl.h"
 #include "esp_vfs.h"
-//#include "esp_video.h"
+#include "../mipi_dsi_cam/esp_video_device.h"
 
 #ifdef __cplusplus
 extern "C" {
