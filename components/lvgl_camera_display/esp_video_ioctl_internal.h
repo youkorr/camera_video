@@ -8,7 +8,7 @@
 
 #include "esp_err.h"
 #include "esp_video.h"
-#include "esp_video_ioctl.h"
+//#include "esp_video_ioctl.h"
 
 #ifdef __cplusplus
 extern "C" {
