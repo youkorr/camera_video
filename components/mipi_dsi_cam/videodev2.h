@@ -941,10 +941,10 @@ struct v4l2_framebuffer {
 #define V4L2_FBUF_FLAG_SRC_CHROMAKEY   0x0040
 
 /* --- overlay/window/framebuffer --- */
-struct v4l2_clip {
-    struct v4l2_rect c;
-    struct v4l2_clip *next;
-};
+//struct v4l2_clip {
+    //struct v4l2_rect c;
+    //struct v4l2_clip *next;
+//};
 /* --- format union --- */
 struct v4l2_format {
     __u32 type; /* enum v4l2_buf_type */
