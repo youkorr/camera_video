@@ -7,7 +7,7 @@
 #pragma once
 
 #include "esp_err.h"
-#include "mipi_dsi_cam.h"
+#include "../mipi_dsi_cam/mipi_dsi_cam.h"
 
 #ifdef __cplusplus
 extern "C" {
