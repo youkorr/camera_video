@@ -923,7 +923,27 @@ struct v4l2_framebuffer {
         __u32 priv;
     } fmt;
 };
+#define V4L2_FBUF_CAP_EXTERNOVERLAY   0x0001
+#define V4L2_FBUF_CAP_CHROMAKEY       0x0002
+#define V4L2_FBUF_CAP_LIST_CLIPPING   0x0004
+#define V4L2_FBUF_CAP_BITMAP_CLIPPING 0x0008
+#define V4L2_FBUF_CAP_LOCAL_ALPHA     0x0010
+#define V4L2_FBUF_CAP_GLOBAL_ALPHA    0x0020
+#define V4L2_FBUF_CAP_LOCAL_INV_ALPHA 0x0040
+#define V4L2_FBUF_CAP_SRC_CHROMAKEY   0x0080
+/*  Flags for the 'flags' field. */
+#define V4L2_FBUF_FLAG_PRIMARY         0x0001
+#define V4L2_FBUF_FLAG_OVERLAY         0x0002
+#define V4L2_FBUF_FLAG_CHROMAKEY       0x0004
+#define V4L2_FBUF_FLAG_LOCAL_ALPHA     0x0008
+#define V4L2_FBUF_FLAG_GLOBAL_ALPHA    0x0010
+#define V4L2_FBUF_FLAG_LOCAL_INV_ALPHA 0x0020
+#define V4L2_FBUF_FLAG_SRC_CHROMAKEY   0x0040
 
+struct v4l2_clip {
+    struct v4l2_rect c;
+    struct v4l2_clip *next;
+};
 /* --- format union --- */
 struct v4l2_format {
     __u32 type; /* enum v4l2_buf_type */
@@ -1041,6 +1061,356 @@ struct v4l2_selection {
 #define V4L2_BUF_FLAG_ERROR          0x00000040
 #define V4L2_BUF_FLAG_TIMESTAMP_MASK 0x0000e000
 
+ *      A N A L O G   V I D E O   S T A N D A R D
+ */
+
+typedef __u64 v4l2_std_id;
+
+/*
+ * Attention: Keep the V4L2_STD_* bit definitions in sync with
+ * include/dt-bindings/display/sdtv-standards.h SDTV_STD_* bit definitions.
+ */
+/* one bit for each */
+#define V4L2_STD_PAL_B  ((v4l2_std_id)0x00000001)
+#define V4L2_STD_PAL_B1 ((v4l2_std_id)0x00000002)
+#define V4L2_STD_PAL_G  ((v4l2_std_id)0x00000004)
+#define V4L2_STD_PAL_H  ((v4l2_std_id)0x00000008)
+#define V4L2_STD_PAL_I  ((v4l2_std_id)0x00000010)
+#define V4L2_STD_PAL_D  ((v4l2_std_id)0x00000020)
+#define V4L2_STD_PAL_D1 ((v4l2_std_id)0x00000040)
+#define V4L2_STD_PAL_K  ((v4l2_std_id)0x00000080)
+
+#define V4L2_STD_PAL_M  ((v4l2_std_id)0x00000100)
+#define V4L2_STD_PAL_N  ((v4l2_std_id)0x00000200)
+#define V4L2_STD_PAL_Nc ((v4l2_std_id)0x00000400)
+#define V4L2_STD_PAL_60 ((v4l2_std_id)0x00000800)
+
+#define V4L2_STD_NTSC_M    ((v4l2_std_id)0x00001000) /* BTSC */
+#define V4L2_STD_NTSC_M_JP ((v4l2_std_id)0x00002000) /* EIA-J */
+#define V4L2_STD_NTSC_443  ((v4l2_std_id)0x00004000)
+#define V4L2_STD_NTSC_M_KR ((v4l2_std_id)0x00008000) /* FM A2 */
+
+#define V4L2_STD_SECAM_B  ((v4l2_std_id)0x00010000)
+#define V4L2_STD_SECAM_D  ((v4l2_std_id)0x00020000)
+#define V4L2_STD_SECAM_G  ((v4l2_std_id)0x00040000)
+#define V4L2_STD_SECAM_H  ((v4l2_std_id)0x00080000)
+#define V4L2_STD_SECAM_K  ((v4l2_std_id)0x00100000)
+#define V4L2_STD_SECAM_K1 ((v4l2_std_id)0x00200000)
+#define V4L2_STD_SECAM_L  ((v4l2_std_id)0x00400000)
+#define V4L2_STD_SECAM_LC ((v4l2_std_id)0x00800000)
+
+/* ATSC/HDTV */
+#define V4L2_STD_ATSC_8_VSB  ((v4l2_std_id)0x01000000)
+#define V4L2_STD_ATSC_16_VSB ((v4l2_std_id)0x02000000)
+
+/* FIXME:
+   Although std_id is 64 bits, there is an issue on PPC32 architecture that
+   makes switch(__u64) to break. So, there's a hack on v4l2-common.c rounding
+   this value to 32 bits.
+   As, currently, the max value is for V4L2_STD_ATSC_16_VSB (30 bits wide),
+   it should work fine. However, if needed to add more than two standards,
+   v4l2-common.c should be fixed.
+ */
+
+/*
+ * Some macros to merge video standards in order to make live easier for the
+ * drivers and V4L2 applications
+ */
+
+/*
+ * "Common" NTSC/M - It should be noticed that V4L2_STD_NTSC_443 is
+ * Missing here.
+ */
+#define V4L2_STD_NTSC (V4L2_STD_NTSC_M | V4L2_STD_NTSC_M_JP | V4L2_STD_NTSC_M_KR)
+/* Secam macros */
+#define V4L2_STD_SECAM_DK (V4L2_STD_SECAM_D | V4L2_STD_SECAM_K | V4L2_STD_SECAM_K1)
+/* All Secam Standards */
+#define V4L2_STD_SECAM \
+    (V4L2_STD_SECAM_B | V4L2_STD_SECAM_G | V4L2_STD_SECAM_H | V4L2_STD_SECAM_DK | V4L2_STD_SECAM_L | V4L2_STD_SECAM_LC)
+/* PAL macros */
+#define V4L2_STD_PAL_BG (V4L2_STD_PAL_B | V4L2_STD_PAL_B1 | V4L2_STD_PAL_G)
+#define V4L2_STD_PAL_DK (V4L2_STD_PAL_D | V4L2_STD_PAL_D1 | V4L2_STD_PAL_K)
+/*
+ * "Common" PAL - This macro is there to be compatible with the old
+ * V4L1 concept of "PAL": /BGDKHI.
+ * Several PAL standards are missing here: /M, /N and /Nc
+ */
+#define V4L2_STD_PAL (V4L2_STD_PAL_BG | V4L2_STD_PAL_DK | V4L2_STD_PAL_H | V4L2_STD_PAL_I)
+/* Chroma "agnostic" standards */
+#define V4L2_STD_B  (V4L2_STD_PAL_B | V4L2_STD_PAL_B1 | V4L2_STD_SECAM_B)
+#define V4L2_STD_G  (V4L2_STD_PAL_G | V4L2_STD_SECAM_G)
+#define V4L2_STD_H  (V4L2_STD_PAL_H | V4L2_STD_SECAM_H)
+#define V4L2_STD_L  (V4L2_STD_SECAM_L | V4L2_STD_SECAM_LC)
+#define V4L2_STD_GH (V4L2_STD_G | V4L2_STD_H)
+#define V4L2_STD_DK (V4L2_STD_PAL_DK | V4L2_STD_SECAM_DK)
+#define V4L2_STD_BG (V4L2_STD_B | V4L2_STD_G)
+#define V4L2_STD_MN (V4L2_STD_PAL_M | V4L2_STD_PAL_N | V4L2_STD_PAL_Nc | V4L2_STD_NTSC)
+
+/* Standards where MTS/BTSC stereo could be found */
+#define V4L2_STD_MTS (V4L2_STD_NTSC_M | V4L2_STD_PAL_M | V4L2_STD_PAL_N | V4L2_STD_PAL_Nc)
+
+/* Standards for Countries with 60Hz Line frequency */
+#define V4L2_STD_525_60 (V4L2_STD_PAL_M | V4L2_STD_PAL_60 | V4L2_STD_NTSC | V4L2_STD_NTSC_443)
+/* Standards for Countries with 50Hz Line frequency */
+#define V4L2_STD_625_50 (V4L2_STD_PAL | V4L2_STD_PAL_N | V4L2_STD_PAL_Nc | V4L2_STD_SECAM)
+
+#define V4L2_STD_ATSC (V4L2_STD_ATSC_8_VSB | V4L2_STD_ATSC_16_VSB)
+/* Macros with none and all analog standards */
+#define V4L2_STD_UNKNOWN 0
+#define V4L2_STD_ALL     (V4L2_STD_525_60 | V4L2_STD_625_50)
+
+struct v4l2_standard {
+    __u32 index;
+    v4l2_std_id id;
+    __u8 name[24];
+    struct v4l2_fract frameperiod; /* Frames, not fields */
+    __u32 framelines;
+    __u32 reserved[4];
+};
+
+struct v4l2_bt_timings {
+    __u32 width;
+    __u32 height;
+    __u32 interlaced;
+    __u32 polarities;
+    __u64 pixelclock;
+    __u32 hfrontporch;
+    __u32 hsync;
+    __u32 hbackporch;
+    __u32 vfrontporch;
+    __u32 vsync;
+    __u32 vbackporch;
+    __u32 il_vfrontporch;
+    __u32 il_vsync;
+    __u32 il_vbackporch;
+    __u32 standards;
+    __u32 flags;
+    struct v4l2_fract picture_aspect;
+    __u8 cea861_vic;
+    __u8 hdmi_vic;
+    __u8 reserved[46];
+} __attribute__((packed));
+
+/* Interlaced or progressive format */
+#define V4L2_DV_PROGRESSIVE 0
+#define V4L2_DV_INTERLACED  1
+
+/* Polarities. If bit is not set, it is assumed to be negative polarity */
+#define V4L2_DV_VSYNC_POS_POL 0x00000001
+#define V4L2_DV_HSYNC_POS_POL 0x00000002
+
+/* Timings standards */
+#define V4L2_DV_BT_STD_CEA861 (1 << 0) /* CEA-861 Digital TV Profile */
+#define V4L2_DV_BT_STD_DMT    (1 << 1) /* VESA Discrete Monitor Timings */
+#define V4L2_DV_BT_STD_CVT    (1 << 2) /* VESA Coordinated Video Timings */
+#define V4L2_DV_BT_STD_GTF    (1 << 3) /* VESA Generalized Timings Formula */
+#define V4L2_DV_BT_STD_SDI    (1 << 4) /* SDI Timings */
+
+/* Flags */
+
+/*
+ * CVT/GTF specific: timing uses reduced blanking (CVT) or the 'Secondary
+ * GTF' curve (GTF). In both cases the horizontal and/or vertical blanking
+ * intervals are reduced, allowing a higher resolution over the same
+ * bandwidth. This is a read-only flag.
+ */
+#define V4L2_DV_FL_REDUCED_BLANKING (1 << 0)
+/*
+ * CEA-861 specific: set for CEA-861 formats with a framerate of a multiple
+ * of six. These formats can be optionally played at 1 / 1.001 speed.
+ * This is a read-only flag.
+ */
+#define V4L2_DV_FL_CAN_REDUCE_FPS (1 << 1)
+/*
+ * CEA-861 specific: only valid for video transmitters, the flag is cleared
+ * by receivers.
+ * If the framerate of the format is a multiple of six, then the pixelclock
+ * used to set up the transmitter is divided by 1.001 to make it compatible
+ * with 60 Hz based standards such as NTSC and PAL-M that use a framerate of
+ * 29.97 Hz. Otherwise this flag is cleared. If the transmitter can't generate
+ * such frequencies, then the flag will also be cleared.
+ */
+#define V4L2_DV_FL_REDUCED_FPS (1 << 2)
+/*
+ * Specific to interlaced formats: if set, then field 1 is really one half-line
+ * longer and field 2 is really one half-line shorter, so each field has
+ * exactly the same number of half-lines. Whether half-lines can be detected
+ * or used depends on the hardware.
+ */
+#define V4L2_DV_FL_HALF_LINE (1 << 3)
+/*
+ * If set, then this is a Consumer Electronics (CE) video format. Such formats
+ * differ from other formats (commonly called IT formats) in that if RGB
+ * encoding is used then by default the RGB values use limited range (i.e.
+ * use the range 16-235) as opposed to 0-255. All formats defined in CEA-861
+ * except for the 640x480 format are CE formats.
+ */
+#define V4L2_DV_FL_IS_CE_VIDEO (1 << 4)
+/* Some formats like SMPTE-125M have an interlaced signal with a odd
+ * total height. For these formats, if this flag is set, the first
+ * field has the extra line. If not, it is the second field.
+ */
+#define V4L2_DV_FL_FIRST_FIELD_EXTRA_LINE (1 << 5)
+/*
+ * If set, then the picture_aspect field is valid. Otherwise assume that the
+ * pixels are square, so the picture aspect ratio is the same as the width to
+ * height ratio.
+ */
+#define V4L2_DV_FL_HAS_PICTURE_ASPECT (1 << 6)
+/*
+ * If set, then the cea861_vic field is valid and contains the Video
+ * Identification Code as per the CEA-861 standard.
+ */
+#define V4L2_DV_FL_HAS_CEA861_VIC (1 << 7)
+/*
+ * If set, then the hdmi_vic field is valid and contains the Video
+ * Identification Code as per the HDMI standard (HDMI Vendor Specific
+ * InfoFrame).
+ */
+#define V4L2_DV_FL_HAS_HDMI_VIC (1 << 8)
+/*
+ * CEA-861 specific: only valid for video receivers.
+ * If set, then HW can detect the difference between regular FPS and
+ * 1000/1001 FPS. Note: This flag is only valid for HDMI VIC codes with
+ * the V4L2_DV_FL_CAN_REDUCE_FPS flag set.
+ */
+#define V4L2_DV_FL_CAN_DETECT_REDUCED_FPS (1 << 9)
+
+/* A few useful defines to calculate the total blanking and frame sizes */
+#define V4L2_DV_BT_BLANKING_WIDTH(bt) ((bt)->hfrontporch + (bt)->hsync + (bt)->hbackporch)
+#define V4L2_DV_BT_FRAME_WIDTH(bt)    ((bt)->width + V4L2_DV_BT_BLANKING_WIDTH(bt))
+#define V4L2_DV_BT_BLANKING_HEIGHT(bt) \
+    ((bt)->vfrontporch + (bt)->vsync + (bt)->vbackporch + (bt)->il_vfrontporch + (bt)->il_vsync + (bt)->il_vbackporch)
+#define V4L2_DV_BT_FRAME_HEIGHT(bt) ((bt)->height + V4L2_DV_BT_BLANKING_HEIGHT(bt))
+
+/** struct v4l2_dv_timings - DV timings
+ * @type:	the type of the timings
+ * @bt:	BT656/1120 timings
+ */
+struct v4l2_dv_timings {
+    __u32 type;
+    union {
+        struct v4l2_bt_timings bt;
+        __u32 reserved[32];
+    };
+} __attribute__((packed));
+
+/* Values for the type field */
+#define V4L2_DV_BT_656_1120 0 /* BT.656/1120 timing type */
+
+struct v4l2_enum_dv_timings {
+    __u32 index;
+    __u32 pad;
+    __u32 reserved[2];
+    struct v4l2_dv_timings timings;
+};
+
+struct v4l2_bt_timings_cap {
+    __u32 min_width;
+    __u32 max_width;
+    __u32 min_height;
+    __u32 max_height;
+    __u64 min_pixelclock;
+    __u64 max_pixelclock;
+    __u32 standards;
+    __u32 capabilities;
+    __u32 reserved[16];
+} __attribute__((packed));
+
+/* Supports interlaced formats */
+#define V4L2_DV_BT_CAP_INTERLACED (1 << 0)
+/* Supports progressive formats */
+#define V4L2_DV_BT_CAP_PROGRESSIVE (1 << 1)
+/* Supports CVT/GTF reduced blanking */
+#define V4L2_DV_BT_CAP_REDUCED_BLANKING (1 << 2)
+/* Supports custom formats */
+#define V4L2_DV_BT_CAP_CUSTOM (1 << 3)
+
+struct v4l2_dv_timings_cap {
+    __u32 type;
+    __u32 pad;
+    __u32 reserved[2];
+    union {
+        struct v4l2_bt_timings_cap bt;
+        __u32 raw_data[32];
+    };
+};
+
+ *	V I D E O   I N P U T S
+ */
+struct v4l2_input {
+    __u32 index;    /*  Which input */
+    __u8 name[32];  /*  Label */
+    __u32 type;     /*  Type of input */
+    __u32 audioset; /*  Associated audios (bitfield) */
+    __u32 tuner;    /*  enum v4l2_tuner_type */
+    v4l2_std_id std;
+    __u32 status;
+    __u32 capabilities;
+    __u32 reserved[3];
+};
+
+/*  Values for the 'type' field */
+#define V4L2_INPUT_TYPE_TUNER  1
+#define V4L2_INPUT_TYPE_CAMERA 2
+#define V4L2_INPUT_TYPE_TOUCH  3
+
+/* field 'status' - general */
+#define V4L2_IN_ST_NO_POWER  0x00000001 /* Attached device is off */
+#define V4L2_IN_ST_NO_SIGNAL 0x00000002
+#define V4L2_IN_ST_NO_COLOR  0x00000004
+
+/* field 'status' - sensor orientation */
+/* If sensor is mounted upside down set both bits */
+#define V4L2_IN_ST_HFLIP 0x00000010 /* Frames are flipped horizontally */
+#define V4L2_IN_ST_VFLIP 0x00000020 /* Frames are flipped vertically */
+
+/* field 'status' - analog */
+#define V4L2_IN_ST_NO_H_LOCK   0x00000100 /* No horizontal sync lock */
+#define V4L2_IN_ST_COLOR_KILL  0x00000200 /* Color killer is active */
+#define V4L2_IN_ST_NO_V_LOCK   0x00000400 /* No vertical sync lock */
+#define V4L2_IN_ST_NO_STD_LOCK 0x00000800 /* No standard format lock */
+
+/* field 'status' - digital */
+#define V4L2_IN_ST_NO_SYNC    0x00010000 /* No synchronization lock */
+#define V4L2_IN_ST_NO_EQU     0x00020000 /* No equalizer lock */
+#define V4L2_IN_ST_NO_CARRIER 0x00040000 /* Carrier recovery failed */
+
+/* field 'status' - VCR and set-top box */
+#define V4L2_IN_ST_MACROVISION 0x01000000 /* Macrovision detected */
+#define V4L2_IN_ST_NO_ACCESS   0x02000000 /* Conditional access denied */
+#define V4L2_IN_ST_VTR         0x04000000 /* VTR time constant */
+
+/* capabilities flags */
+#define V4L2_IN_CAP_DV_TIMINGS     0x00000002             /* Supports S_DV_TIMINGS */
+#define V4L2_IN_CAP_CUSTOM_TIMINGS V4L2_IN_CAP_DV_TIMINGS /* For compatibility */
+#define V4L2_IN_CAP_STD            0x00000004             /* Supports S_STD */
+#define V4L2_IN_CAP_NATIVE_SIZE    0x00000008             /* Supports setting native size */
+
+ *	V I D E O   O U T P U T S
+ */
+struct v4l2_output {
+    __u32 index;     /*  Which output */
+    __u8 name[32];   /*  Label */
+    __u32 type;      /*  Type of output */
+    __u32 audioset;  /*  Associated audios (bitfield) */
+    __u32 modulator; /*  Associated modulator */
+    v4l2_std_id std;
+    __u32 capabilities;
+    __u32 reserved[3];
+};
+/*  Values for the 'type' field */
+#define V4L2_OUTPUT_TYPE_MODULATOR        1
+#define V4L2_OUTPUT_TYPE_ANALOG           2
+#define V4L2_OUTPUT_TYPE_ANALOGVGAOVERLAY 3
+
+/* capabilities flags */
+#define V4L2_OUT_CAP_DV_TIMINGS     0x00000002              /* Supports S_DV_TIMINGS */
+#define V4L2_OUT_CAP_CUSTOM_TIMINGS V4L2_OUT_CAP_DV_TIMINGS /* For compatibility */
+#define V4L2_OUT_CAP_STD            0x00000004              /* Supports S_STD */
+#define V4L2_OUT_CAP_NATIVE_SIZE    0x00000008              /* Supports setting native size */
+
+
 struct v4l2_requestbuffers {
     __u32 count;
     __u32 type;
@@ -1113,6 +1483,60 @@ struct v4l2_buffer {
     __u32 reserved2;
     __u32 reserved;
 };
+static __inline__ __u64 v4l2_timeval_to_ns(const struct timeval *tv)
+{
+    return (__u64)tv->tv_sec * 1000000000ULL + tv->tv_usec * 1000;
+}
+
+/*  Flags for 'flags' field */
+/* Buffer is mapped (flag) */
+#define V4L2_BUF_FLAG_MAPPED 0x00000001
+/* Buffer is queued for processing */
+#define V4L2_BUF_FLAG_QUEUED 0x00000002
+/* Buffer is ready */
+#define V4L2_BUF_FLAG_DONE 0x00000004
+/* Image is a keyframe (I-frame) */
+#define V4L2_BUF_FLAG_KEYFRAME 0x00000008
+/* Image is a P-frame */
+#define V4L2_BUF_FLAG_PFRAME 0x00000010
+/* Image is a B-frame */
+#define V4L2_BUF_FLAG_BFRAME 0x00000020
+/* Buffer is ready, but the data contained within is corrupted. */
+#define V4L2_BUF_FLAG_ERROR 0x00000040
+/* Buffer is added to an unqueued request */
+#define V4L2_BUF_FLAG_IN_REQUEST 0x00000080
+/* timecode field is valid */
+#define V4L2_BUF_FLAG_TIMECODE 0x00000100
+/* Don't return the capture buffer until OUTPUT timestamp changes */
+#define V4L2_BUF_FLAG_M2M_HOLD_CAPTURE_BUF 0x00000200
+/* Buffer is prepared for queuing */
+#define V4L2_BUF_FLAG_PREPARED 0x00000400
+/* Cache handling flags */
+#define V4L2_BUF_FLAG_NO_CACHE_INVALIDATE 0x00000800
+#define V4L2_BUF_FLAG_NO_CACHE_CLEAN      0x00001000
+/* Timestamp type */
+#define V4L2_BUF_FLAG_TIMESTAMP_MASK      0x0000e000
+#define V4L2_BUF_FLAG_TIMESTAMP_UNKNOWN   0x00000000
+#define V4L2_BUF_FLAG_TIMESTAMP_MONOTONIC 0x00002000
+#define V4L2_BUF_FLAG_TIMESTAMP_COPY      0x00004000
+/* Timestamp sources. */
+#define V4L2_BUF_FLAG_TSTAMP_SRC_MASK 0x00070000
+#define V4L2_BUF_FLAG_TSTAMP_SRC_EOF  0x00000000
+#define V4L2_BUF_FLAG_TSTAMP_SRC_SOE  0x00010000
+/* mem2mem encoder/decoder */
+#define V4L2_BUF_FLAG_LAST 0x00100000
+/* request_fd is valid */
+#define V4L2_BUF_FLAG_REQUEST_FD 0x00800000
+
+struct v4l2_exportbuffer {
+    __u32 type; /* enum v4l2_buf_type */
+    __u32 index;
+    __u32 plane;
+    __u32 flags;
+    __s32 fd;
+    __u32 reserved[11];
+};
+
 
 struct v4l2_captureparm {
     __u32 capability;       /* Supported modes */
@@ -1122,6 +1546,9 @@ struct v4l2_captureparm {
     __u32 readbuffers;      /* # of buffers for read */
     __u32 reserved[4];
 };
+/*  Flags for 'capability' and 'capturemode' fields */
+#define V4L2_MODE_HIGHQUALITY 0x0001 /*  High quality imaging mode */
+#define V4L2_CAP_TIMEPERFRAME 0x1000 /*  timeperframe field is supported */
 
 struct v4l2_outputparm {
     __u32 capability;       /* Supported modes */
@@ -1180,13 +1607,39 @@ struct v4l2_queryctrl {
     __u32 flags;
     __u32 reserved[2];
 };
+/*  Used in the VIDIOC_QUERYMENU ioctl for querying menu items */
 struct v4l2_querymenu {
     __u32 id;
     __u32 index;
-    __u8  name[32];
-    __s64 value;
+    union {
+        __u8 name[32]; /* Whatever */
+        __s64 value;
+    };
     __u32 reserved;
-};
+} __attribute__((packed));
+
+/*  Control flags  */
+#define V4L2_CTRL_FLAG_DISABLED         0x0001
+#define V4L2_CTRL_FLAG_GRABBED          0x0002
+#define V4L2_CTRL_FLAG_READ_ONLY        0x0004
+#define V4L2_CTRL_FLAG_UPDATE           0x0008
+#define V4L2_CTRL_FLAG_INACTIVE         0x0010
+#define V4L2_CTRL_FLAG_SLIDER           0x0020
+#define V4L2_CTRL_FLAG_WRITE_ONLY       0x0040
+#define V4L2_CTRL_FLAG_VOLATILE         0x0080
+#define V4L2_CTRL_FLAG_HAS_PAYLOAD      0x0100
+#define V4L2_CTRL_FLAG_EXECUTE_ON_WRITE 0x0200
+#define V4L2_CTRL_FLAG_MODIFY_LAYOUT    0x0400
+
+/*  Query flags, to be ORed with the control ID */
+#define V4L2_CTRL_FLAG_NEXT_CTRL     0x80000000
+#define V4L2_CTRL_FLAG_NEXT_COMPOUND 0x40000000
+
+/*  User-class control IDs defined by V4L2 */
+#define V4L2_CID_MAX_CTRLS 1024
+/*  IDs reserved for driver specific controls */
+#define V4L2_CID_PRIVATE_BASE 0x08000000
+
 
 /* Ext controls (modern) */
 struct v4l2_ext_control {
@@ -1200,17 +1653,86 @@ struct v4l2_ext_control {
         __u8 *p_u8;
         __u16 *p_u16;
         __u32 *p_u32;
+        struct v4l2_area *p_area;
+        struct v4l2_ctrl_h264_sps *p_h264_sps;
+        struct v4l2_ctrl_h264_pps *p_h264_pps;
+        struct v4l2_ctrl_h264_scaling_matrix *p_h264_scaling_matrix;
+        struct v4l2_ctrl_h264_pred_weights *p_h264_pred_weights;
+        struct v4l2_ctrl_h264_slice_params *p_h264_slice_params;
+        struct v4l2_ctrl_h264_decode_params *p_h264_decode_params;
+        struct v4l2_ctrl_fwht_params *p_fwht_params;
+        struct v4l2_ctrl_vp8_frame *p_vp8_frame;
+        struct v4l2_ctrl_mpeg2_sequence *p_mpeg2_sequence;
+        struct v4l2_ctrl_mpeg2_picture *p_mpeg2_picture;
+        struct v4l2_ctrl_mpeg2_quantisation *p_mpeg2_quantisation;
+        struct v4l2_ctrl_vp9_compressed_hdr *p_vp9_compressed_hdr_probs;
+        struct v4l2_ctrl_vp9_frame *p_vp9_frame;
         void *ptr;
     };
-} __attribute__ ((packed));
+} __attribute__((packed));
+
 
 struct v4l2_ext_controls {
-    __u32 ctrl_class;
+    union {
+        __u32 ctrl_class;
+        __u32 which;
+    };
     __u32 count;
     __u32 error_idx;
-    __u32 reserved[2];
+    __s32 request_fd;
+    __u32 reserved[1];
     struct v4l2_ext_control *controls;
 };
+
+#define V4L2_CTRL_ID_MASK           (0x0fffffff)
+#define V4L2_CTRL_ID2CLASS(id)      ((id)&0x0fff0000UL)
+#define V4L2_CTRL_ID2WHICH(id)      ((id)&0x0fff0000UL)
+#define V4L2_CTRL_DRIVER_PRIV(id)   (((id)&0xffff) >= 0x1000)
+#define V4L2_CTRL_MAX_DIMS          (4)
+#define V4L2_CTRL_WHICH_CUR_VAL     0
+#define V4L2_CTRL_WHICH_DEF_VAL     0x0f000000
+#define V4L2_CTRL_WHICH_REQUEST_VAL 0x0f010000
+
+enum v4l2_ctrl_type {
+    V4L2_CTRL_TYPE_INTEGER      = 1,
+    V4L2_CTRL_TYPE_BOOLEAN      = 2,
+    V4L2_CTRL_TYPE_MENU         = 3,
+    V4L2_CTRL_TYPE_BUTTON       = 4,
+    V4L2_CTRL_TYPE_INTEGER64    = 5,
+    V4L2_CTRL_TYPE_CTRL_CLASS   = 6,
+    V4L2_CTRL_TYPE_STRING       = 7,
+    V4L2_CTRL_TYPE_BITMASK      = 8,
+    V4L2_CTRL_TYPE_INTEGER_MENU = 9,
+
+    /* Compound types are >= 0x0100 */
+    V4L2_CTRL_COMPOUND_TYPES = 0x0100,
+    V4L2_CTRL_TYPE_U8        = 0x0100,
+    V4L2_CTRL_TYPE_U16       = 0x0101,
+    V4L2_CTRL_TYPE_U32       = 0x0102,
+    V4L2_CTRL_TYPE_AREA      = 0x0106,
+
+    V4L2_CTRL_TYPE_HDR10_CLL_INFO          = 0x0110,
+    V4L2_CTRL_TYPE_HDR10_MASTERING_DISPLAY = 0x0111,
+
+    V4L2_CTRL_TYPE_H264_SPS            = 0x0200,
+    V4L2_CTRL_TYPE_H264_PPS            = 0x0201,
+    V4L2_CTRL_TYPE_H264_SCALING_MATRIX = 0x0202,
+    V4L2_CTRL_TYPE_H264_SLICE_PARAMS   = 0x0203,
+    V4L2_CTRL_TYPE_H264_DECODE_PARAMS  = 0x0204,
+    V4L2_CTRL_TYPE_H264_PRED_WEIGHTS   = 0x0205,
+
+    V4L2_CTRL_TYPE_FWHT_PARAMS = 0x0220,
+
+    V4L2_CTRL_TYPE_VP8_FRAME = 0x0240,
+
+    V4L2_CTRL_TYPE_MPEG2_QUANTISATION = 0x0250,
+    V4L2_CTRL_TYPE_MPEG2_SEQUENCE     = 0x0251,
+    V4L2_CTRL_TYPE_MPEG2_PICTURE      = 0x0252,
+
+    V4L2_CTRL_TYPE_VP9_COMPRESSED_HDR = 0x0260,
+    V4L2_CTRL_TYPE_VP9_FRAME          = 0x0261,
+};
+
 
 struct v4l2_query_ext_ctrl {
     __u32 id;
