@@ -31,7 +31,6 @@ static void init_mmap_table() {
     }
 }
 
-// Vérifie un minimum que le pointeur renvoyé est valide
 static bool check_alignment(void *addr) {
     uintptr_t a = (uintptr_t)addr;
     if (a % 4 != 0) {
@@ -47,7 +46,7 @@ void *mmap(void *addr, size_t length, int prot, int flags, int fd, off_t offset)
 
     ESP_LOGI(TAG, "📍 mmap(): fd=%d offset=%ld length=%zu", fd, offset, length);
 
-    // Récupérer le contexte caméra
+    // Récupérer le contexte V4L2 de la caméra
     auto *ctx = (esphome::mipi_dsi_cam::MipiCameraV4L2Context*) get_v4l2_context_from_fd(fd);
     if (!ctx || !ctx->buffers) {
         ESP_LOGE(TAG, "❌ No V4L2 context for fd=%d", fd);
@@ -63,26 +62,38 @@ void *mmap(void *addr, size_t length, int prot, int flags, int fd, off_t offset)
         return MAP_FAILED;
     }
 
-    // Récupérer le buffer matériel (DMA)
+    // Récupérer le buffer DMA matériel
     void *buffer = ctx->buffers->element[index].buffer;
-    size_t buf_length = ctx->buffers->element[index].size;  // <-- adapte ici si ton champ diffère
-
     if (!buffer) {
         ESP_LOGE(TAG, "❌ Buffer %u not allocated", index);
         errno = ENOMEM;
         return MAP_FAILED;
     }
 
-    // Invalidation du cache pour s'assurer que les données DMA sont lisibles
+    // 🔧 Sécurité : si la structure n’a pas de champ de taille, on utilise length
+    size_t buf_length = length;
+#if defined(__has_member)
+    if constexpr (__has_member(esp_video_buffer_element, size)) {
+        buf_length = ctx->buffers->element[index].size;
+    } else if constexpr (__has_member(esp_video_buffer_element, length)) {
+        buf_length = ctx->buffers->element[index].length;
+    } else if constexpr (__has_member(esp_video_buffer_element, buf_length)) {
+        buf_length = ctx->buffers->element[index].buf_length;
+    }
+#else
+    // fallback générique pour tous SDKs : on garde length passé à mmap()
+#endif
+
+    // Synchronisation cache : invalider avant lecture CPU
     esp_cache_msync(buffer, buf_length, ESP_CACHE_MSYNC_FLAG_INVALIDATE);
     check_alignment(buffer);
 
-    // Enregistrer le mapping (émulation mmap)
+    // Enregistrement dans la table de suivi
     int slot = -1;
     for (int i = 0; i < MAX_MMAP_ENTRIES; i++) {
         if (mmap_table[i].addr == nullptr) {
             slot = i;
-            mmap_table[i].addr = buffer;
+            mmap_table[i].addr   = buffer;
             mmap_table[i].length = buf_length;
             mmap_table[i].vfs_fd = fd;
             mmap_table[i].offset = offset;
@@ -124,5 +135,6 @@ int munmap(void *addr, size_t length) {
 }
 
 #endif // USE_ESP32_VARIANT_ESP32P4
+
 
 
